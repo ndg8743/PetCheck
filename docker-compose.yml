@@ -1,59 +1,78 @@
 version: '3.8'
 
 services:
-  redis:
+  petcheck-redis:
     image: redis:alpine
     container_name: petcheck-redis
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
     volumes:
-      - redis-data:/data
+      - petcheck-redis-data:/data
+    networks:
+      - petcheck-internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  backend:
+  petcheck-backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.backend.prod
     container_name: petcheck-backend
-    ports:
-      - "3001:3001"
+    restart: unless-stopped
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=3001
-      - REDIS_HOST=redis
+      - REDIS_HOST=petcheck-redis
       - REDIS_PORT=6379
-      - JWT_SECRET=petcheck-dev-secret-change-in-production-1234567890
-      - JWT_EXPIRES_IN=7d
-      - FRONTEND_URL=http://localhost:5173
-      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-      - LOG_LEVEL=debug
     depends_on:
-      redis:
+      petcheck-redis:
         condition: service_healthy
-    volumes:
-      - ./packages/shared:/app/packages/shared
-      - ./packages/backend:/app/packages/backend
-      - /app/packages/backend/node_modules
+    networks:
+      - traefik-public
+      - petcheck-internal
+    labels:
+      - "traefik.enable=true"
+      # API Router
+      - "traefik.http.routers.petcheck-api.rule=Host(`petcheck.me`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.petcheck-api.entrypoints=websecure"
+      - "traefik.http.routers.petcheck-api.tls=true"
+      - "traefik.http.routers.petcheck-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.petcheck-api.priority=100"
+      - "traefik.http.routers.petcheck-api.middlewares=security-headers@file,compression@file,rate-limit-general@file"
+      - "traefik.http.services.petcheck-api.loadbalancer.server.port=3001"
 
-  frontend:
+  petcheck-frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile.frontend.prod
     container_name: petcheck-frontend
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:3001/api
+    restart: unless-stopped
     depends_on:
-      - backend
-    volumes:
-      - ./packages/shared:/app/packages/shared
-      - ./packages/frontend:/app/packages/frontend
-      - /app/packages/frontend/node_modules
+      - petcheck-backend
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      # Frontend Router
+      - "traefik.http.routers.petcheck.rule=Host(`petcheck.me`) || Host(`www.petcheck.me`)"
+      - "traefik.http.routers.petcheck.entrypoints=websecure"
+      - "traefik.http.routers.petcheck.tls=true"
+      - "traefik.http.routers.petcheck.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.petcheck.priority=50"
+      - "traefik.http.routers.petcheck.middlewares=security-headers@file,compression@file"
+      - "traefik.http.services.petcheck.loadbalancer.server.port=80"
+      # WWW redirect
+      - "traefik.http.middlewares.petcheck-www-redirect.redirectregex.regex=^https://www\\.petcheck\\.me/(.*)"
+      - "traefik.http.middlewares.petcheck-www-redirect.redirectregex.replacement=https://petcheck.me/$${1}"
+      - "traefik.http.middlewares.petcheck-www-redirect.redirectregex.permanent=true"
+
+networks:
+  traefik-public:
+    external: true
+  petcheck-internal:
+    driver: bridge
 
 volumes:
-  redis-data:
+  petcheck-redis-data:

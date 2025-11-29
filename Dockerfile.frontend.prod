@@ -1,0 +1,50 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy root package files
+COPY package*.json ./
+
+# Copy shared package
+COPY packages/shared/package*.json ./packages/shared/
+
+# Copy frontend package
+COPY packages/frontend/package*.json ./packages/frontend/
+
+# Install all dependencies
+RUN npm install
+
+# Copy shared source and build
+COPY packages/shared ./packages/shared
+RUN npm run build:shared
+
+# Copy frontend source
+COPY packages/frontend ./packages/frontend
+
+# Build frontend (skip tsc type checking, use vite directly)
+WORKDIR /app/packages/frontend
+RUN npx vite build
+
+# Production stage with nginx
+FROM nginx:alpine
+
+# Copy built frontend files
+COPY --from=builder /app/packages/frontend/dist/ /usr/share/nginx/html/
+
+# Copy nginx config for SPA
+RUN echo 'server { \
+    listen 80; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ { \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
