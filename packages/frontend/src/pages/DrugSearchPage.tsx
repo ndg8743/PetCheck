@@ -125,6 +125,7 @@ export const DrugSearchPage: React.FC = () => {
   };
 
   const getSeverityLevel = (drug: Drug): 'high' | 'moderate' | 'low' => {
+    if (drug.totalReports === 0) return 'low'; // No reports = unknown, default to low
     const seriousPercentage = (drug.seriousReports / drug.totalReports) * 100;
     if (seriousPercentage > 30 || drug.deathReports > 100) return 'high';
     if (seriousPercentage > 15 || drug.deathReports > 50) return 'moderate';
@@ -132,6 +133,7 @@ export const DrugSearchPage: React.FC = () => {
   };
 
   const getSafetyScore = (drug: Drug): number => {
+    if (drug.totalReports === 0) return 100; // No reports = no known issues
     const seriousPercentage = (drug.seriousReports / drug.totalReports) * 100;
     const deathPercentage = (drug.deathReports / drug.totalReports) * 100;
     return Math.max(0, Math.round(100 - seriousPercentage - (deathPercentage * 3)));
