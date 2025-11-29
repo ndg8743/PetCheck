@@ -62,6 +62,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setToken(newToken);
       setUser(newUser);
+
+      // Show tutorial if not completed
+      const tutorialCompleted = localStorage.getItem('petcheck_tutorial_completed');
+      if (!tutorialCompleted) {
+        setIsNewUser(true);
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       throw new Error(error.response?.data?.message || 'Login failed');
@@ -122,6 +128,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setToken(newToken);
       setUser(newUser);
+
+      // New signups always see the tutorial
+      setIsNewUser(true);
     } catch (error: any) {
       console.error('Signup error:', error);
       throw new Error(error.response?.data?.message || 'Signup failed');
