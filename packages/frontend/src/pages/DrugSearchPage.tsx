@@ -66,7 +66,7 @@ export const DrugSearchPage: React.FC = () => {
       if (filters.drugClass) params.set('drugClass', filters.drugClass);
       if (filters.route) params.set('route', filters.route);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/drugs?${params}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/drugs?${params}`);
       const data = await response.json();
 
       if (data.success && data.data?.drugs) {

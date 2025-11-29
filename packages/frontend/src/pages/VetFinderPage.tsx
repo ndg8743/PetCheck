@@ -39,25 +39,117 @@ export const VetFinderPage: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedClinic, setExpandedClinic] = useState<string | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const searchByCoordinates = async (latitude: number, longitude: number) => {
     setLoading(true);
     setError(null);
     setHasSearched(true);
 
     try {
-      setTimeout(() => {
-        setClinics([
-          { id: '1', name: 'City Veterinary Hospital', address: '123 Main Street', city: 'Springfield', state: 'IL', zipCode: '62701', phone: '(555) 123-4567', distance: 0.8, rating: 4.8, reviewCount: 245, specialties: ['Emergency Care', 'Surgery', 'Dentistry'], emergencyServices: true, hours: { monday: '8:00 AM - 6:00 PM', tuesday: '8:00 AM - 6:00 PM', wednesday: '8:00 AM - 6:00 PM', thursday: '8:00 AM - 6:00 PM', friday: '8:00 AM - 6:00 PM', saturday: '9:00 AM - 2:00 PM', sunday: 'Closed' } },
-          { id: '2', name: 'PetCare Animal Clinic', address: '456 Oak Avenue', city: 'Springfield', state: 'IL', zipCode: '62702', phone: '(555) 234-5678', distance: 1.2, rating: 4.6, reviewCount: 189, specialties: ['Internal Medicine', 'Cardiology'], emergencyServices: false, hours: { monday: '9:00 AM - 5:00 PM', tuesday: '9:00 AM - 5:00 PM', wednesday: '9:00 AM - 5:00 PM', thursday: '9:00 AM - 5:00 PM', friday: '9:00 AM - 5:00 PM', saturday: 'Closed', sunday: 'Closed' } },
-          { id: '3', name: 'Emergency Vet 24/7', address: '789 Elm Street', city: 'Springfield', state: 'IL', zipCode: '62703', phone: '(555) 345-6789', distance: 2.1, rating: 4.9, reviewCount: 412, specialties: ['Emergency Care', 'Critical Care', 'Surgery'], emergencyServices: true, hours: { monday: 'Open 24 Hours', tuesday: 'Open 24 Hours', wednesday: 'Open 24 Hours', thursday: 'Open 24 Hours', friday: 'Open 24 Hours', saturday: 'Open 24 Hours', sunday: 'Open 24 Hours' } },
-          { id: '4', name: 'Gentle Paws Veterinary Clinic', address: '321 Pine Road', city: 'Springfield', state: 'IL', zipCode: '62704', phone: '(555) 456-7890', distance: 3.5, rating: 4.7, reviewCount: 156, specialties: ['Wellness Exams', 'Vaccinations', 'Dentistry'], emergencyServices: false, hours: { monday: '8:00 AM - 7:00 PM', tuesday: '8:00 AM - 7:00 PM', wednesday: '8:00 AM - 7:00 PM', thursday: '8:00 AM - 7:00 PM', friday: '8:00 AM - 7:00 PM', saturday: '9:00 AM - 3:00 PM', sunday: 'Closed' } },
-        ]);
-        setLoading(false);
-      }, 800);
-    } catch (err) {
-      setError('Failed to find veterinary clinics. Please try again.');
+      const params = new URLSearchParams();
+      params.set('latitude', latitude.toString());
+      params.set('longitude', longitude.toString());
+      params.set('radius', '10000');
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/vets/search?${params}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.clinics) {
+        const transformedClinics: VetClinic[] = data.data.clinics.map((clinic: any) => ({
+          id: clinic.placeId || clinic.id,
+          name: clinic.name,
+          address: clinic.address || clinic.vicinity || '',
+          city: '',
+          state: '',
+          zipCode: '',
+          phone: clinic.phone || clinic.formattedPhoneNumber || 'Not available',
+          distance: clinic.distance ? (clinic.distance / 1609.34) : 0, // Convert meters to miles
+          rating: clinic.rating || 0,
+          reviewCount: clinic.userRatingsTotal || clinic.reviewCount || 0,
+          specialties: clinic.types?.filter((t: string) => t !== 'veterinary_care' && t !== 'point_of_interest') || [],
+          emergencyServices: clinic.openNow || clinic.types?.includes('emergency') || false,
+          hours: clinic.openingHours || {
+            monday: 'Call for hours',
+            tuesday: 'Call for hours',
+            wednesday: 'Call for hours',
+            thursday: 'Call for hours',
+            friday: 'Call for hours',
+            saturday: 'Call for hours',
+            sunday: 'Call for hours',
+          },
+        }));
+        setClinics(transformedClinics);
+      } else {
+        setClinics([]);
+      }
       setLoading(false);
+    } catch (err) {
+      console.error('Failed to search vets:', err);
+      setClinics([]);
+      setLoading(false);
+    }
+  };
+
+  const searchByAddress = async (address: string) => {
+    setLoading(true);
+    setError(null);
+    setHasSearched(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.set('address', address);
+      params.set('radius', '10000');
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/vets/search/address?${params}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.clinics) {
+        const transformedClinics: VetClinic[] = data.data.clinics.map((clinic: any) => ({
+          id: clinic.placeId || clinic.id,
+          name: clinic.name,
+          address: clinic.address || clinic.vicinity || '',
+          city: '',
+          state: '',
+          zipCode: '',
+          phone: clinic.phone || clinic.formattedPhoneNumber || 'Not available',
+          distance: clinic.distance ? (clinic.distance / 1609.34) : 0,
+          rating: clinic.rating || 0,
+          reviewCount: clinic.userRatingsTotal || clinic.reviewCount || 0,
+          specialties: clinic.types?.filter((t: string) => t !== 'veterinary_care' && t !== 'point_of_interest') || [],
+          emergencyServices: clinic.openNow || clinic.types?.includes('emergency') || false,
+          hours: clinic.openingHours || {
+            monday: 'Call for hours',
+            tuesday: 'Call for hours',
+            wednesday: 'Call for hours',
+            thursday: 'Call for hours',
+            friday: 'Call for hours',
+            saturday: 'Call for hours',
+            sunday: 'Call for hours',
+          },
+        }));
+        setClinics(transformedClinics);
+      } else {
+        setClinics([]);
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to search vets by address:', err);
+      setClinics([]);
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!location.trim()) return;
+
+    // Check if location looks like coordinates
+    const coordMatch = location.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      await searchByCoordinates(lat, lng);
+    } else {
+      await searchByAddress(location);
     }
   };
 
@@ -65,9 +157,12 @@ export const VetFinderPage: React.FC = () => {
     setUseCurrentLocation(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation(`${position.coords.latitude}, ${position.coords.longitude}`);
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setLocation(`${latitude}, ${longitude}`);
           setUseCurrentLocation(false);
+          // Automatically search with the coordinates
+          await searchByCoordinates(latitude, longitude);
         },
         () => {
           setError('Unable to get your location. Please enter an address manually.');
