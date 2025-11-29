@@ -48,23 +48,51 @@ export const DrugSearchPage: React.FC = () => {
   }, [searchParams]);
 
   const performSearch = async () => {
+    const query = searchParams.get('q') || '';
+    if (!query.trim()) {
+      setDrugs([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      setTimeout(() => {
-        const mockDrugs: Drug[] = [
-          { id: '1', name: 'Apoquel', genericName: 'Oclacitinib', manufacturer: 'Zoetis', species: ['Dog'], totalReports: 12543, seriousReports: 3421, deathReports: 234, hasRecall: false, lastUpdated: '2024-11-15' },
-          { id: '2', name: 'Bravecto', genericName: 'Fluralaner', manufacturer: 'Merck', species: ['Dog', 'Cat'], totalReports: 8932, seriousReports: 2103, deathReports: 156, hasRecall: false, lastUpdated: '2024-11-10' },
-          { id: '3', name: 'Heartgard Plus', genericName: 'Ivermectin/Pyrantel', manufacturer: 'Boehringer Ingelheim', species: ['Dog'], totalReports: 4521, seriousReports: 892, deathReports: 45, hasRecall: true, lastUpdated: '2024-11-20' },
-          { id: '4', name: 'Revolution Plus', genericName: 'Selamectin/Sarolaner', manufacturer: 'Zoetis', species: ['Cat'], totalReports: 3210, seriousReports: 654, deathReports: 32, hasRecall: false, lastUpdated: '2024-11-05' },
-          { id: '5', name: 'Simparica', genericName: 'Sarolaner', manufacturer: 'Zoetis', species: ['Dog'], totalReports: 7654, seriousReports: 1832, deathReports: 98, hasRecall: false, lastUpdated: '2024-11-12' },
-        ];
+      const params = new URLSearchParams();
+      params.set('query', query);
+      params.set('limit', itemsPerPage.toString());
+      params.set('offset', ((currentPage - 1) * itemsPerPage).toString());
+      if (filters.species) params.set('species', filters.species);
+      if (filters.drugClass) params.set('drugClass', filters.drugClass);
+      if (filters.route) params.set('route', filters.route);
 
-        setDrugs(mockDrugs);
-        setTotalPages(Math.ceil(mockDrugs.length / itemsPerPage));
-        setLoading(false);
-      }, 500);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/drugs?${params}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.drugs) {
+        // Transform API response to match Drug interface
+        const transformedDrugs: Drug[] = data.data.drugs.map((drug: any) => ({
+          id: drug.id,
+          name: drug.tradeName || drug.genericName,
+          genericName: drug.genericName,
+          manufacturer: drug.manufacturer || 'Unknown',
+          species: drug.approvedSpecies || [],
+          totalReports: drug.adverseEventStats?.totalReports || 0,
+          seriousReports: drug.adverseEventStats?.seriousReports || 0,
+          deathReports: drug.adverseEventStats?.deathReports || 0,
+          hasRecall: drug.hasActiveRecall || false,
+          lastUpdated: drug.lastUpdated || new Date().toISOString(),
+        }));
+
+        setDrugs(transformedDrugs);
+        setTotalPages(Math.ceil((data.meta?.total || transformedDrugs.length) / itemsPerPage));
+      } else {
+        setDrugs([]);
+        if (data.error?.message) {
+          setError(data.error.message);
+        }
+      }
+      setLoading(false);
     } catch (err) {
       setError('Failed to search drugs. Please try again.');
       setLoading(false);
