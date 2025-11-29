@@ -235,7 +235,16 @@ export class AdverseEventsService {
       };
     } catch (error) {
       logger.error('Drug summary error:', error);
-      throw error;
+      // Return empty summary instead of throwing
+      return {
+        drugName,
+        totalReports: 0,
+        speciesBreakdown: [],
+        outcomeBreakdown: [],
+        topReactions: [],
+        timeSeriesMonthly: [],
+        lastUpdated: new Date(),
+      };
     }
   }
 
