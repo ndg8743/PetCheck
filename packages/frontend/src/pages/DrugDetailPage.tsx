@@ -62,46 +62,101 @@ export const DrugDetailPage: React.FC = () => {
   const fetchDrugDetails = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
-        setDrug({
-          id: id || '1',
-          name: 'Apoquel',
-          genericName: 'Oclacitinib',
-          manufacturer: 'Zoetis',
-          species: ['Dog'],
-          description: 'Apoquel is used to control itching associated with allergic dermatitis and control of atopic dermatitis in dogs at least 12 months of age.',
-          indications: [
-            'Control of pruritus associated with allergic dermatitis',
-            'Control of atopic dermatitis in dogs',
-          ],
-          warnings: [
-            'Do not use in dogs less than 12 months of age',
-            'Use with caution in dogs with serious infections',
-            'Monitor for development of infections and neoplasia',
-            'May increase susceptibility to infection and development of neoplasia',
-          ],
-          totalReports: 12543,
-          seriousReports: 3421,
-          deathReports: 234,
-          hasRecall: false,
-          lastUpdated: '2024-11-15',
-        });
+      setError(null);
 
-        setAdverseEvents([
-          { category: 'Vomiting', count: 2341, percentage: 18.7 },
-          { category: 'Diarrhea', count: 2103, percentage: 16.8 },
-          { category: 'Lethargy', count: 1876, percentage: 15.0 },
-          { category: 'Loss of Appetite', count: 1542, percentage: 12.3 },
-          { category: 'Skin Lesions', count: 1234, percentage: 9.8 },
-          { category: 'Infections', count: 987, percentage: 7.9 },
-          { category: 'Death', count: 234, percentage: 1.9 },
-          { category: 'Other', count: 2226, percentage: 17.6 },
-        ]);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-        setSpeciesData([{ species: 'Dog', totalReports: 12543, percentage: 100 }]);
+      // Fetch drug details by ID or name
+      let drugData = null;
+
+      // First try to get by ID
+      const drugResponse = await fetch(`${apiUrl}/drugs/${encodeURIComponent(id || '')}`);
+      const drugResult = await drugResponse.json();
+
+      if (drugResult.success && drugResult.data) {
+        drugData = drugResult.data;
+      } else {
+        // If not found by ID, try by name (in case ID is actually the drug name)
+        const nameResponse = await fetch(`${apiUrl}/drugs/name/${encodeURIComponent(id || '')}`);
+        const nameResult = await nameResponse.json();
+        if (nameResult.success && nameResult.data) {
+          drugData = nameResult.data;
+        }
+      }
+
+      if (!drugData) {
+        setError('Drug not found');
         setLoading(false);
-      }, 500);
+        return;
+      }
+
+      // Get the drug name for adverse events lookup
+      const drugName = drugData.tradeName || drugData.genericName || id;
+
+      // Fetch adverse events summary
+      const aeResponse = await fetch(`${apiUrl}/adverse-events/summary/${encodeURIComponent(drugName)}`);
+      const aeResult = await aeResponse.json();
+      const aeSummary = aeResult.success ? aeResult.data : null;
+
+      // Transform drug data to match our interface
+      setDrug({
+        id: drugData.id || id || '',
+        name: drugData.tradeName || drugData.genericName || 'Unknown',
+        genericName: drugData.genericName || drugData.activeIngredients?.join(', ') || '',
+        manufacturer: drugData.manufacturer || 'Unknown',
+        species: drugData.approvedSpecies || [],
+        description: drugData.dosageForm
+          ? `${drugData.tradeName || drugData.genericName} is a ${drugData.dosageForm.toLowerCase()} ${drugData.drugClass || 'medication'} for veterinary use.`
+          : `Veterinary ${drugData.drugClass || 'medication'} for ${(drugData.approvedSpecies || []).join(', ') || 'animals'}.`,
+        indications: drugData.indications || [
+          `Approved for use in ${(drugData.approvedSpecies || []).join(', ') || 'animals'}`,
+          drugData.route ? `Administered via ${drugData.route}` : null,
+        ].filter(Boolean),
+        warnings: drugData.warnings || [
+          'Always consult with a veterinarian before use',
+          'Follow dosage instructions carefully',
+          'Monitor for adverse reactions',
+        ],
+        totalReports: aeSummary?.totalReports || 0,
+        seriousReports: aeSummary?.seriousReports || 0,
+        deathReports: aeSummary?.deathReports || 0,
+        hasRecall: drugData.hasActiveRecall || false,
+        recallDetails: drugData.recallDetails,
+        lastUpdated: drugData.lastUpdated || new Date().toISOString().split('T')[0],
+      });
+
+      // Set adverse events from summary
+      if (aeSummary?.topReactions && aeSummary.topReactions.length > 0) {
+        const totalReactions = aeSummary.topReactions.reduce((sum: number, r: any) => sum + r.count, 0);
+        setAdverseEvents(aeSummary.topReactions.map((reaction: any) => ({
+          category: reaction.term || reaction.reaction || 'Unknown',
+          count: reaction.count,
+          percentage: totalReactions > 0 ? Math.round((reaction.count / totalReactions) * 1000) / 10 : 0,
+        })));
+      } else {
+        setAdverseEvents([]);
+      }
+
+      // Set species breakdown from summary
+      if (aeSummary?.speciesBreakdown && aeSummary.speciesBreakdown.length > 0) {
+        const totalSpecies = aeSummary.speciesBreakdown.reduce((sum: number, s: any) => sum + s.count, 0);
+        setSpeciesData(aeSummary.speciesBreakdown.map((species: any) => ({
+          species: species.term || species.species || 'Unknown',
+          totalReports: species.count,
+          percentage: totalSpecies > 0 ? Math.round((species.count / totalSpecies) * 1000) / 10 : 0,
+        })));
+      } else {
+        // Use approved species from drug data if no AE breakdown
+        setSpeciesData((drugData.approvedSpecies || []).map((species: string) => ({
+          species,
+          totalReports: 0,
+          percentage: 0,
+        })));
+      }
+
+      setLoading(false);
     } catch (err) {
+      console.error('Error fetching drug details:', err);
       setError('Failed to load drug details. Please try again.');
       setLoading(false);
     }
