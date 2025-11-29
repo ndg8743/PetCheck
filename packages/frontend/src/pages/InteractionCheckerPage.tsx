@@ -52,28 +52,84 @@ export const InteractionCheckerPage: React.FC = () => {
     setHasSearched(true);
 
     try {
-      setTimeout(() => {
-        const mockInteractions: Interaction[] = [
-          {
-            drugs: drugs.slice(0, 2),
-            severity: 'severe',
-            description: 'Concurrent use of these medications may increase the risk of adverse neurological effects.',
-            recommendation: 'Consult your veterinarian before combining these medications. Close monitoring is required if used together.',
-            references: ['FDA Adverse Event Database', 'Veterinary Drug Handbook 2024'],
-          },
-          {
-            drugs: drugs.slice(1, 3),
-            severity: 'moderate',
-            description: 'May cause increased sedation or gastrointestinal upset when used together.',
-            recommendation: 'Monitor your pet closely for unusual drowsiness or digestive issues. Adjust dosing schedule if needed under veterinary guidance.',
-          },
-        ];
-        setInteractions(mockInteractions);
-        setLoading(false);
-      }, 800);
-    } catch (err) {
+      // Map species to API format
+      const speciesMap: Record<string, string> = {
+        dog: 'canine',
+        cat: 'feline',
+        horse: 'equine',
+        bird: 'avian',
+        other: 'other',
+      };
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/interactions/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          drugs: validDrugs.map(name => ({ name })),
+          species: speciesMap[species] || 'canine',
+          conditions: conditions.filter(c => c.trim()),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // Transform API response to component format
+        const transformedInteractions: Interaction[] = [];
+
+        // Add drug-drug interactions
+        if (data.data.drugInteractions) {
+          data.data.drugInteractions.forEach((interaction: any) => {
+            transformedInteractions.push({
+              drugs: [interaction.drug1?.name, interaction.drug2?.name].filter(Boolean),
+              severity: interaction.severity === 'major' || interaction.severity === 'contraindicated' ? 'severe' :
+                       interaction.severity === 'moderate' ? 'moderate' : 'mild',
+              description: interaction.description || 'Potential interaction detected.',
+              recommendation: interaction.management || 'Consult your veterinarian.',
+              references: interaction.sources?.map((s: any) => s.reference) || [],
+            });
+          });
+        }
+
+        // Add species interactions
+        if (data.data.speciesInteractions) {
+          data.data.speciesInteractions.forEach((interaction: any) => {
+            transformedInteractions.push({
+              drugs: [interaction.drugName],
+              severity: interaction.severity === 'major' || interaction.severity === 'contraindicated' ? 'severe' :
+                       interaction.severity === 'moderate' ? 'moderate' : 'mild',
+              description: interaction.description || 'Species-specific concern.',
+              recommendation: interaction.management || 'Consult your veterinarian.',
+              references: interaction.sources?.map((s: any) => s.reference) || [],
+            });
+          });
+        }
+
+        // Add condition interactions
+        if (data.data.conditionInteractions) {
+          data.data.conditionInteractions.forEach((interaction: any) => {
+            transformedInteractions.push({
+              drugs: [interaction.drugName],
+              severity: interaction.severity === 'major' || interaction.severity === 'contraindicated' ? 'severe' :
+                       interaction.severity === 'moderate' ? 'moderate' : 'mild',
+              description: `${interaction.condition}: ${interaction.description || 'Potential concern.'}`,
+              recommendation: interaction.management || 'Consult your veterinarian.',
+              references: interaction.sources?.map((s: any) => s.reference) || [],
+            });
+          });
+        }
+
+        setInteractions(transformedInteractions);
+      } else {
+        setInteractions([]);
+      }
       setLoading(false);
-      alert('Failed to check interactions. Please try again.');
+    } catch (err) {
+      console.error('Interaction check error:', err);
+      setLoading(false);
+      setInteractions([]);
     }
   };
 

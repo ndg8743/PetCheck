@@ -55,26 +55,48 @@ export const ResearcherPage: React.FC = () => {
     setHasSearched(true);
 
     try {
-      setTimeout(() => {
-        const mockResults: AdverseEventRecord[] = Array.from({ length: 50 }, (_, i) => ({
-          reportId: `AER-2024-${10000 + i}`,
-          drugName: ['Apoquel', 'Bravecto', 'Heartgard', 'Simparica'][i % 4],
-          species: ['Dog', 'Cat'][i % 2],
-          breed: ['Golden Retriever', 'Labrador', 'Beagle', 'Siamese', 'Persian'][i % 5],
-          age: Math.floor(Math.random() * 15) + 1,
-          weight: Math.floor(Math.random() * 80) + 10,
-          sex: ['Male', 'Female'][i % 2],
-          adverseEvent: ['Vomiting', 'Diarrhea', 'Lethargy', 'Loss of Appetite', 'Seizure'][i % 5],
-          outcome: ['Recovered', 'Recovering', 'Death', 'Unknown'][i % 4],
-          reportDate: `2024-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-          serious: Math.random() > 0.7,
+      // Build query params
+      const params = new URLSearchParams();
+      if (filters.drugName) params.set('drugName', filters.drugName);
+      if (filters.species) params.set('species', filters.species);
+      if (filters.startDate) params.set('dateFrom', filters.startDate.replace(/-/g, ''));
+      if (filters.endDate) params.set('dateTo', filters.endDate.replace(/-/g, ''));
+      if (filters.outcomeType) params.set('outcome', filters.outcomeType);
+      params.set('limit', '100');
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/adverse-events?${params}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.events) {
+        // Transform API response to component format
+        const transformedResults: AdverseEventRecord[] = data.data.events.map((event: any, index: number) => ({
+          reportId: event.uniqueAerIdNumber || event.reportId || `AER-${index}`,
+          drugName: event.drug?.activeIngredient || event.drug?.brandName || 'Unknown Drug',
+          species: event.animal?.species || 'Unknown',
+          breed: event.animal?.breed || 'Unknown',
+          age: event.animal?.age?.value || 0,
+          weight: event.animal?.weight?.value || 0,
+          sex: event.animal?.gender || 'Unknown',
+          adverseEvent: event.reactions?.join(', ') || 'Not specified',
+          outcome: event.outcome?.seriousness || 'Unknown',
+          reportDate: event.originalReceiveDate || event.receiveDate || 'Unknown',
+          serious: event.outcome?.seriousness === 'death' || event.serious === true,
         }));
-        setResults(mockResults);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
+
+        // Filter for serious only if selected
+        const filteredResults = filters.seriousOnly
+          ? transformedResults.filter(r => r.serious)
+          : transformedResults;
+
+        setResults(filteredResults);
+      } else {
+        setResults([]);
+      }
       setLoading(false);
-      alert('Failed to fetch data. Please try again.');
+    } catch (err) {
+      console.error('Adverse events search error:', err);
+      setLoading(false);
+      setResults([]);
     }
   };
 
