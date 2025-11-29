@@ -3,22 +3,29 @@ export type {
   User,
   UserRole,
   Pet,
-  PetSpecies,
-  AnimalDrug,
+  SpeciesCategory,
+  Drug,
   AdverseEvent,
   AdverseEventSummary,
-  DrugRecall,
+  Recall,
   InteractionCheckRequest,
-  InteractionCheckResponse,
+  InteractionCheckResult,
   DrugInteraction,
-  SafetyData,
-  VetSearchFilters,
-  Veterinarian,
+  PetSafetySummary,
+  VeterinarianInfo,
 } from '@petcheck/shared';
+
+// Aliases for backward compatibility
+export type PetSpecies = string;
+export type AnimalDrug = import('@petcheck/shared').Drug;
+export type DrugRecall = import('@petcheck/shared').Recall;
+export type InteractionCheckResponse = import('@petcheck/shared').InteractionCheckResult;
+export type SafetyData = import('@petcheck/shared').PetSafetySummary;
+export type Veterinarian = import('@petcheck/shared').VeterinarianInfo;
 
 // Frontend-specific types
 export interface AuthState {
-  user: User | null;
+  user: import('@petcheck/shared').User | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -31,7 +38,7 @@ export interface LoginCredentials {
 
 export interface SignupData extends LoginCredentials {
   name: string;
-  role: UserRole;
+  role: import('@petcheck/shared').UserRole;
 }
 
 export interface ApiError {

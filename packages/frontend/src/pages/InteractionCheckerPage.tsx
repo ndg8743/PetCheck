@@ -4,7 +4,6 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Disclaimer } from '../components/common/Disclaimer';

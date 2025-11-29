@@ -7,8 +7,6 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { SearchBar } from '../components/common/SearchBar';
-import { DrugCard } from '../components/common/DrugCard';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 

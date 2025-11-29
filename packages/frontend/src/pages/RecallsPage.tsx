@@ -7,7 +7,6 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
-import { RecallAlert, RecallBadge } from '../components/common/RecallAlert';
 
 interface Recall {
   id: string;
@@ -121,7 +120,7 @@ export const RecallsPage: React.FC = () => {
               </svg>
             </div>
             <p className="text-accent-600 dark:text-accent-400 mb-4 font-medium">{error}</p>
-            <Button onClick={fetchRecalls}>Try Again</Button>
+            <Button onClick={() => fetchRecalls()}>Try Again</Button>
           </div>
         </Card>
       </div>

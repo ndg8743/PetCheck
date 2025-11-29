@@ -2,13 +2,19 @@
   "name": "PetCheck - Drug Safety Explorer",
   "short_name": "PetCheck",
   "description": "FDA Animal Drug Safety Explorer for pet owners and researchers",
-  "theme_color": "#0891b2",
+  "theme_color": "#020617",
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "/",
   "start_url": "/",
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/pwa-192x192.png",
       "sizes": "192x192",
@@ -28,19 +34,5 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["health", "medical", "utilities"],
-  "screenshots": [
-    {
-      "src": "/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshot-narrow.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ]
+  "categories": ["health", "medical", "utilities"]
 }

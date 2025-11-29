@@ -4,9 +4,8 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
-import { LoadingSpinner, LoadingScreen } from '../components/ui/LoadingSpinner';
+import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
-import { QuickStatus } from '../components/common/SafetyIndicator';
 
 interface Pet {
   id: string;
@@ -154,13 +153,6 @@ export const DashboardPage: React.FC = () => {
     return Math.max(0, score);
   };
 
-  const getSafetyLevel = (score: number): 'safe' | 'caution' | 'warning' | 'danger' => {
-    if (score >= 80) return 'safe';
-    if (score >= 60) return 'caution';
-    if (score >= 40) return 'warning';
-    return 'danger';
-  };
-
   if (loading) {
     return <LoadingScreen message="Loading your dashboard..." />;
   }
@@ -303,7 +295,6 @@ export const DashboardPage: React.FC = () => {
             <div className="grid md:grid-cols-2 gap-6">
               {pets.map((pet, index) => {
                 const safetyScore = getSafetyScore(pet);
-                const safetyLevel = getSafetyLevel(safetyScore);
                 const petAlerts = alerts.filter(a => a.petId === pet.id);
 
                 return (

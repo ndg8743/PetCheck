@@ -8,8 +8,7 @@ import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { Disclaimer } from '../components/common/Disclaimer';
-import { BarChart } from '../components/charts/BarChart';
-import { Tabs } from '../components/ui/Tabs';
+import { TabButtons } from '../components/ui/Tabs';
 
 interface DrugDetail {
   id: string;
@@ -53,7 +52,7 @@ export const DrugDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactionDrugs, setInteractionDrugs] = useState<string[]>(['']);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     fetchDrugDetails();
@@ -303,15 +302,18 @@ export const DrugDetailPage: React.FC = () => {
 
         {/* Tabbed Content */}
         <div className="mb-8 animate-fade-up" style={{ animationDelay: '0.15s' }}>
-          <Tabs
-            tabs={['Overview', 'Adverse Events', 'Check Interactions']}
+          <TabButtons
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'adverse-events', label: 'Adverse Events' },
+              { id: 'interactions', label: 'Check Interactions' },
+            ]}
             activeTab={activeTab}
             onChange={setActiveTab}
-            variant="boxed"
           />
 
           <div className="mt-6">
-            {activeTab === 0 && (
+            {activeTab === 'overview' && (
               <div className="grid lg:grid-cols-2 gap-6">
                 <Card variant="elevated">
                   <div className="p-6">
@@ -383,7 +385,7 @@ export const DrugDetailPage: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 1 && (
+            {activeTab === 'adverse-events' && (
               <Card variant="elevated">
                 <div className="p-6">
                   <h2 className="text-xl font-bold text-navy-900 dark:text-white mb-6 flex items-center gap-2">
@@ -425,7 +427,7 @@ export const DrugDetailPage: React.FC = () => {
               </Card>
             )}
 
-            {activeTab === 2 && (
+            {activeTab === 'interactions' && (
               <Card variant="elevated">
                 <div className="p-6">
                   <h2 className="text-xl font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
@@ -489,7 +491,7 @@ export const DrugDetailPage: React.FC = () => {
         </div>
 
         {/* Medical Disclaimer */}
-        <Disclaimer variant="full" className="animate-fade-up" style={{ animationDelay: '0.2s' }} />
+        <Disclaimer variant="full" className="animate-fade-up [animation-delay:0.2s]" />
       </div>
     </div>
   );

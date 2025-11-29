@@ -5,9 +5,8 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
-import { Modal, ConfirmDialog } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/Modal';
 
 interface Pet {
   id: string;
@@ -86,25 +85,6 @@ export const PetListPage: React.FC = () => {
       setDeleteConfirm({ open: false, petId: '', petName: '' });
     } catch (err) {
       alert('Failed to delete pet. Please try again.');
-    }
-  };
-
-  const getSpeciesIcon = (species: string) => {
-    switch (species.toLowerCase()) {
-      case 'dog':
-        return (
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18 4c-1.5 0-3 .5-4 2-1-1.5-2.5-2-4-2-3 0-6 2.5-6 7 0 5 4 8.5 10 12 6-3.5 10-7 10-12 0-4.5-3-7-6-7z"/>
-          </svg>
-        );
-      case 'cat':
-        return (
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2c-5.5 0-10 4.5-10 10s4.5 10 10 10 10-4.5 10-10-4.5-10-10-10zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z"/>
-          </svg>
-        );
-      default:
-        return null;
     }
   };
 

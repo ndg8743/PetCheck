@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient, UseQueryResult, UseMutationResult } from '@tanstack/react-query';
 import {
-  AnimalDrug,
+  Drug,
   AdverseEvent,
   AdverseEventSummary,
-  DrugRecall,
+  Recall,
   InteractionCheckRequest,
-  InteractionCheckResponse,
+  InteractionCheckResult,
   Pet,
-  SafetyData,
-  Veterinarian,
+  PetSafetySummary,
+  VeterinarianInfo,
 } from '@petcheck/shared';
 import api from '../lib/api';
 import type {
@@ -19,7 +19,7 @@ import type {
 } from '../types';
 
 // Drugs
-export const useDrugs = (filters?: SearchFilters): UseQueryResult<PaginatedResponse<AnimalDrug>> => {
+export const useDrugs = (filters?: SearchFilters): UseQueryResult<PaginatedResponse<Drug>> => {
   return useQuery({
     queryKey: ['drugs', filters],
     queryFn: async () => {
@@ -29,7 +29,7 @@ export const useDrugs = (filters?: SearchFilters): UseQueryResult<PaginatedRespo
   });
 };
 
-export const useDrug = (drugId: string): UseQueryResult<AnimalDrug> => {
+export const useDrug = (drugId: string): UseQueryResult<Drug> => {
   return useQuery({
     queryKey: ['drugs', drugId],
     queryFn: async () => {
@@ -74,7 +74,7 @@ export const useAdverseEventSummary = (drugId: string): UseQueryResult<AdverseEv
 };
 
 // Recalls
-export const useRecalls = (filters?: RecallFilters): UseQueryResult<PaginatedResponse<DrugRecall>> => {
+export const useRecalls = (filters?: RecallFilters): UseQueryResult<PaginatedResponse<Recall>> => {
   return useQuery({
     queryKey: ['recalls', filters],
     queryFn: async () => {
@@ -84,7 +84,7 @@ export const useRecalls = (filters?: RecallFilters): UseQueryResult<PaginatedRes
   });
 };
 
-export const useDrugRecalls = (drugId: string): UseQueryResult<DrugRecall[]> => {
+export const useDrugRecalls = (drugId: string): UseQueryResult<Recall[]> => {
   return useQuery({
     queryKey: ['recalls', 'drug', drugId],
     queryFn: async () => {
@@ -97,7 +97,7 @@ export const useDrugRecalls = (drugId: string): UseQueryResult<DrugRecall[]> => 
 
 // Interaction Check
 export const useInteractionCheck = (): UseMutationResult<
-  InteractionCheckResponse,
+  InteractionCheckResult,
   Error,
   InteractionCheckRequest
 > => {
@@ -174,7 +174,7 @@ export const useDeletePet = (): UseMutationResult<void, Error, string> => {
 };
 
 // Pet Safety Data
-export const usePetSafety = (petId: string): UseQueryResult<SafetyData> => {
+export const usePetSafety = (petId: string): UseQueryResult<PetSafetySummary> => {
   return useQuery({
     queryKey: ['pets', petId, 'safety'],
     queryFn: async () => {
@@ -228,7 +228,7 @@ export const useVetSearch = (filters: {
   zipCode?: string;
   radius?: number;
   specialty?: string;
-}): UseQueryResult<Veterinarian[]> => {
+}): UseQueryResult<VeterinarianInfo[]> => {
   return useQuery({
     queryKey: ['vets', filters],
     queryFn: async () => {
@@ -239,7 +239,7 @@ export const useVetSearch = (filters: {
   });
 };
 
-export const useVet = (vetId: string): UseQueryResult<Veterinarian> => {
+export const useVet = (vetId: string): UseQueryResult<VeterinarianInfo> => {
   return useQuery({
     queryKey: ['vets', vetId],
     queryFn: async () => {
@@ -251,7 +251,7 @@ export const useVet = (vetId: string): UseQueryResult<Veterinarian> => {
 };
 
 // User favorites
-export const useFavoriteDrugs = (): UseQueryResult<AnimalDrug[]> => {
+export const useFavoriteDrugs = (): UseQueryResult<Drug[]> => {
   return useQuery({
     queryKey: ['favorites', 'drugs'],
     queryFn: async () => {

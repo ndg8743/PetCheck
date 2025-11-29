@@ -105,21 +105,55 @@ export const Badge: React.FC<BadgeProps> = ({
   );
 };
 
+// Badge item type for badges prop
+export interface BadgeItem {
+  label: string;
+  variant?: BadgeProps['variant'];
+}
+
 // Badge group for displaying multiple badges
 export interface BadgeGroupProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  badges?: BadgeItem[];
   className?: string;
   max?: number;
+  maxVisible?: number;
 }
 
 export const BadgeGroup: React.FC<BadgeGroupProps> = ({
   children,
+  badges,
   className = '',
   max,
+  maxVisible,
 }) => {
+  const limit = maxVisible ?? max;
+
+  // If badges array is provided, render from that
+  if (badges) {
+    const visibleBadges = limit ? badges.slice(0, limit) : badges;
+    const remainingCount = limit ? badges.length - limit : 0;
+
+    return (
+      <div className={`flex flex-wrap gap-1.5 ${className}`}>
+        {visibleBadges.map((badge, index) => (
+          <Badge key={index} variant={badge.variant || 'default'} size="sm">
+            {badge.label}
+          </Badge>
+        ))}
+        {remainingCount > 0 && (
+          <Badge variant="default" size="sm">
+            +{remainingCount}
+          </Badge>
+        )}
+      </div>
+    );
+  }
+
+  // Otherwise render children
   const childArray = React.Children.toArray(children);
-  const visibleChildren = max ? childArray.slice(0, max) : childArray;
-  const remainingCount = max ? childArray.length - max : 0;
+  const visibleChildren = limit ? childArray.slice(0, limit) : childArray;
+  const remainingCount = limit ? childArray.length - limit : 0;
 
   return (
     <div className={`flex flex-wrap gap-1.5 ${className}`}>

@@ -8,12 +8,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'favicon-32x32.png', 'favicon-16x16.png'],
       manifest: {
         name: 'PetCheck - Drug Safety Explorer',
         short_name: 'PetCheck',
         description: 'FDA Animal Drug Safety Explorer for pet owners and researchers',
-        theme_color: '#0891b2',
+        theme_color: '#020617',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',

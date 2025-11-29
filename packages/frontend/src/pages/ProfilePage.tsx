@@ -93,7 +93,7 @@ export const ProfilePage: React.FC = () => {
           name: user.name || '',
           phoneNumber: '',
           timezone: 'America/New_York',
-          createdAt: user.createdAt || new Date().toISOString(),
+          createdAt: user.createdAt ? (typeof user.createdAt === 'string' ? user.createdAt : new Date(user.createdAt).toISOString()) : new Date().toISOString(),
         });
 
         // Load notification preferences from localStorage
