@@ -29,6 +29,7 @@ export type DrugClass =
   | 'anticonvulsant'
   | 'antidepressant'
   | 'antineoplastic'
+  | 'antiemetic'
   | 'supplement'
   | 'other'
   | 'unknown';
@@ -66,10 +67,15 @@ export interface Drug {
   nada?: string;            // New Animal Drug Application number
   anada?: string;           // Abbreviated NADA number
   greenBookNumber?: string;
+  description?: string;
   indications?: string[];
   warnings?: string[];
   contraindications?: string[];
   isDiscontinued?: boolean;
+  // Adverse event statistics
+  totalReports?: number;
+  seriousReports?: number;
+  deathReports?: number;
   source: 'greenbook' | 'openfda' | 'rxnorm' | 'manual';
   lastUpdated: Date;
 }

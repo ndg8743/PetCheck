@@ -26,6 +26,8 @@ export interface ApiMeta {
   cacheAge?: number;  // seconds since cached
   stale?: boolean;
   requestId?: string;
+  // Allow additional metadata properties
+  [key: string]: unknown;
 }
 
 export interface PaginationParams {

@@ -89,12 +89,13 @@ export function normalizeSpeciesName(name: string): string {
 /**
  * Create a cache key from search parameters
  */
-export function createCacheKey(prefix: string, params: Record<string, unknown>): string {
-  const sortedKeys = Object.keys(params).sort();
+export function createCacheKey(prefix: string, params: object): string {
+  const paramsRecord = params as Record<string, unknown>;
+  const sortedKeys = Object.keys(paramsRecord).sort();
   const normalizedParams = sortedKeys
-    .filter(key => params[key] !== undefined && params[key] !== null && params[key] !== '')
+    .filter(key => paramsRecord[key] !== undefined && paramsRecord[key] !== null && paramsRecord[key] !== '')
     .map(key => {
-      let value = params[key];
+      let value = paramsRecord[key];
       if (typeof value === 'string') {
         value = value.toLowerCase().trim();
       } else if (Array.isArray(value)) {

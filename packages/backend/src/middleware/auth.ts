@@ -137,13 +137,26 @@ export const requireAdmin = requireRole('admin');
 
 /**
  * Rate limiting for authenticated users
+ * Uses a Map with automatic cleanup to prevent memory leaks
  */
 export function userRateLimit(maxRequests: number, windowMs: number) {
   const userRequests: Map<string, { count: number; resetAt: number }> = new Map();
+  let lastCleanup = Date.now();
+  const cleanupInterval = windowMs * 2; // Cleanup every 2 windows
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    const userId = req.userId || req.ip;
+    const userId = req.userId || req.ip || 'unknown';
     const now = Date.now();
+
+    // Periodic cleanup of expired entries to prevent memory leak
+    if (now - lastCleanup > cleanupInterval) {
+      for (const [key, value] of userRequests.entries()) {
+        if (now > value.resetAt) {
+          userRequests.delete(key);
+        }
+      }
+      lastCleanup = now;
+    }
 
     let userData = userRequests.get(userId);
 

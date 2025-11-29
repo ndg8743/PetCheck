@@ -20,6 +20,8 @@ const logger = createLogger('google-auth');
 
 // In-memory user store (in production, use a database)
 const userStore: Map<string, User> = new Map();
+// Index for O(1) Google ID lookups instead of O(n)
+const googleIdIndex: Map<string, string> = new Map(); // googleId -> userId
 
 // Initialize Google OAuth client
 const oAuth2Client = new OAuth2Client(config.google.clientId);
@@ -139,15 +141,12 @@ export class GoogleAuthService {
   }
 
   /**
-   * Find user by Google ID
+   * Find user by Google ID - O(1) using index
    */
   private async findUserByGoogleId(googleId: string): Promise<User | null> {
-    for (const user of userStore.values()) {
-      if (user.googleId === googleId) {
-        return user;
-      }
-    }
-    return null;
+    const userId = googleIdIndex.get(googleId);
+    if (!userId) return null;
+    return userStore.get(userId) || null;
   }
 
   /**
@@ -176,6 +175,11 @@ export class GoogleAuthService {
    */
   private async saveUser(user: User): Promise<void> {
     userStore.set(user.id, user);
+
+    // Maintain Google ID index for O(1) lookups
+    if (user.googleId) {
+      googleIdIndex.set(user.googleId, user.id);
+    }
 
     // Also persist to Redis for durability (in production, use database)
     try {
@@ -258,9 +262,9 @@ export class GoogleAuthService {
     };
 
     return jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn,
+      expiresIn: config.jwt.expiresIn as string,
       issuer: config.jwt.issuer,
-    });
+    } as jwt.SignOptions);
   }
 
   /**

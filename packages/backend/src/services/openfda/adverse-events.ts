@@ -374,7 +374,7 @@ export class AdverseEventsService {
         unit: raw.duration.unit || 'day',
       } : undefined,
       source: 'openfda',
-      rawData: raw,
+      rawData: raw as unknown as Record<string, unknown>,
     };
   }
 
