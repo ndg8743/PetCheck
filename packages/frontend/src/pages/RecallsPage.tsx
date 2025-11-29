@@ -43,13 +43,16 @@ export const RecallsPage: React.FC = () => {
     filterRecalls();
   }, [recalls, searchQuery, severityFilter, statusFilter, speciesFilter]);
 
-  const fetchRecalls = async () => {
+  const fetchRecalls = async (query?: string) => {
     try {
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams();
       params.set('limit', '50');
+      if (query) {
+        params.set('query', query);
+      }
 
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/recalls?${params}`);
       const data = await response.json();
@@ -182,7 +185,7 @@ export const RecallsPage: React.FC = () => {
         {/* Search and Filters */}
         <Card variant="elevated" className="mb-6 animate-fade-up" style={{ animationDelay: '0.15s' }}>
           <div className="p-4">
-            <div className="grid md:grid-cols-5 gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); fetchRecalls(searchQuery); }} className="grid md:grid-cols-6 gap-4">
               <div className="md:col-span-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -214,7 +217,10 @@ export const RecallsPage: React.FC = () => {
                 <option value="cat">Cat</option>
                 <option value="horse">Horse</option>
               </Select>
-            </div>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Searching...' : 'Search'}
+              </Button>
+            </form>
           </div>
         </Card>
 
