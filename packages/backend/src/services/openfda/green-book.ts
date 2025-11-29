@@ -122,7 +122,14 @@ export class GreenBookService {
       return cached.data;
     }
 
-    let results = Array.from(drugDatabase.values()).filter((d) => d.id && !d.id.startsWith('name:'));
+    // Get unique drugs by ID (avoid duplicates from name-indexed entries)
+    const uniqueDrugs = new Map<string, Drug>();
+    for (const drug of drugDatabase.values()) {
+      if (drug.id && !uniqueDrugs.has(drug.id)) {
+        uniqueDrugs.set(drug.id, drug);
+      }
+    }
+    let results = Array.from(uniqueDrugs.values());
 
     // Apply filters
     if (params.query) {
