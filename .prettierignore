@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist
+build
+out
+coverage
+*.tsbuildinfo
+
+# Cache
+.cache
+.parcel-cache
+.next
+.nuxt
+.vuepress/dist
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Editor
+.vscode
+.idea
+
+# Generated files
+*.min.js
+*.min.css
+
+# PWA
+sw.js
+workbox-*.js
+precache-manifest.*.js
+
+# Misc
+.env
+.env.*
+!.env.example
