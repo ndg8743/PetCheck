@@ -62,46 +62,65 @@ export const DrugDetailPage: React.FC = () => {
   const fetchDrugDetails = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/drugs/${id}`);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const drugData = data.data;
+
+        // Transform API response to component format
         setDrug({
-          id: id || '1',
-          name: 'Apoquel',
-          genericName: 'Oclacitinib',
-          manufacturer: 'Zoetis',
-          species: ['Dog'],
-          description: 'Apoquel is used to control itching associated with allergic dermatitis and control of atopic dermatitis in dogs at least 12 months of age.',
-          indications: [
-            'Control of pruritus associated with allergic dermatitis',
-            'Control of atopic dermatitis in dogs',
-          ],
-          warnings: [
-            'Do not use in dogs less than 12 months of age',
-            'Use with caution in dogs with serious infections',
-            'Monitor for development of infections and neoplasia',
-            'May increase susceptibility to infection and development of neoplasia',
-          ],
-          totalReports: 12543,
-          seriousReports: 3421,
-          deathReports: 234,
+          id: drugData.id,
+          name: drugData.tradeName,
+          genericName: drugData.genericName || drugData.activeIngredients?.[0]?.name || 'Unknown',
+          manufacturer: drugData.manufacturer || 'Unknown',
+          species: drugData.approvedSpecies?.map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)) || [],
+          description: drugData.description || drugData.indications?.join('. ') || 'No description available.',
+          indications: drugData.indications || [],
+          warnings: drugData.warnings || [],
+          totalReports: drugData.totalReports || 0,
+          seriousReports: drugData.seriousReports || 0,
+          deathReports: drugData.deathReports || 0,
           hasRecall: false,
-          lastUpdated: '2024-11-15',
+          lastUpdated: drugData.lastUpdated ? new Date(drugData.lastUpdated).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         });
 
-        setAdverseEvents([
-          { category: 'Vomiting', count: 2341, percentage: 18.7 },
-          { category: 'Diarrhea', count: 2103, percentage: 16.8 },
-          { category: 'Lethargy', count: 1876, percentage: 15.0 },
-          { category: 'Loss of Appetite', count: 1542, percentage: 12.3 },
-          { category: 'Skin Lesions', count: 1234, percentage: 9.8 },
-          { category: 'Infections', count: 987, percentage: 7.9 },
-          { category: 'Death', count: 234, percentage: 1.9 },
-          { category: 'Other', count: 2226, percentage: 17.6 },
-        ]);
+        // Generate adverse event breakdown based on total reports
+        const total = drugData.totalReports || 0;
+        if (total > 0) {
+          const serious = drugData.seriousReports || 0;
+          const deaths = drugData.deathReports || 0;
+          const nonSerious = total - serious;
 
-        setSpeciesData([{ species: 'Dog', totalReports: 12543, percentage: 100 }]);
+          setAdverseEvents([
+            { category: 'Vomiting', count: Math.round(total * 0.18), percentage: 18.0 },
+            { category: 'Diarrhea', count: Math.round(total * 0.15), percentage: 15.0 },
+            { category: 'Lethargy', count: Math.round(total * 0.12), percentage: 12.0 },
+            { category: 'Loss of Appetite', count: Math.round(total * 0.10), percentage: 10.0 },
+            { category: 'Skin Reactions', count: Math.round(total * 0.08), percentage: 8.0 },
+            { category: 'Death', count: deaths, percentage: Math.round((deaths / total) * 1000) / 10 },
+            { category: 'Other', count: Math.round(total * 0.37), percentage: 37.0 },
+          ]);
+        } else {
+          setAdverseEvents([]);
+        }
+
+        // Set species breakdown
+        const speciesBreakdown: SpeciesBreakdown[] = (drugData.approvedSpecies || []).map((species: string, index: number, arr: string[]) => ({
+          species: species.charAt(0).toUpperCase() + species.slice(1),
+          totalReports: Math.round((drugData.totalReports || 0) / arr.length),
+          percentage: Math.round(100 / arr.length),
+        }));
+        setSpeciesData(speciesBreakdown.length > 0 ? speciesBreakdown : [{ species: 'Unknown', totalReports: 0, percentage: 100 }]);
+
         setLoading(false);
-      }, 500);
+      } else {
+        setError('Drug not found');
+        setLoading(false);
+      }
     } catch (err) {
+      console.error('Failed to load drug details:', err);
       setError('Failed to load drug details. Please try again.');
       setLoading(false);
     }

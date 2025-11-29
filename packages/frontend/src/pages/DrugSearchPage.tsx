@@ -74,12 +74,12 @@ export const DrugSearchPage: React.FC = () => {
         const transformedDrugs: Drug[] = data.data.drugs.map((drug: any) => ({
           id: drug.id,
           name: drug.tradeName || drug.genericName,
-          genericName: drug.genericName,
+          genericName: drug.genericName || drug.activeIngredients?.[0]?.name || '',
           manufacturer: drug.manufacturer || 'Unknown',
           species: drug.approvedSpecies || [],
-          totalReports: drug.adverseEventStats?.totalReports || 0,
-          seriousReports: drug.adverseEventStats?.seriousReports || 0,
-          deathReports: drug.adverseEventStats?.deathReports || 0,
+          totalReports: drug.totalReports || drug.adverseEventStats?.totalReports || 0,
+          seriousReports: drug.seriousReports || drug.adverseEventStats?.seriousReports || 0,
+          deathReports: drug.deathReports || drug.adverseEventStats?.deathReports || 0,
           hasRecall: drug.hasActiveRecall || false,
           lastUpdated: drug.lastUpdated || new Date().toISOString(),
         }));
