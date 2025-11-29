@@ -79,71 +79,65 @@ export const PetDetailPage: React.FC = () => {
   const fetchPetDetails = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API calls
-      // const response = await fetch(`/api/pets/${id}`);
 
-      // Mock data
-      setTimeout(() => {
-        setPet({
-          id: id || '1',
-          name: 'Max',
-          species: 'Dog',
-          breed: 'Golden Retriever',
-          age: 5,
-          weight: 65,
-          birthDate: '2019-03-15',
-        });
+      // Load pets from localStorage
+      const savedPets = localStorage.getItem('petcheck_pets');
+      if (savedPets) {
+        const pets = JSON.parse(savedPets);
+        const foundPet = pets.find((p: any) => p.id === id);
 
-        setMedications([
-          {
-            id: 'm1',
-            drugName: 'Apoquel',
-            dosage: '16mg',
-            frequency: 'Twice daily',
-            route: 'Oral',
-            startDate: '2024-01-15',
-            prescribedBy: 'Dr. Smith',
-            notes: 'For seasonal allergies',
-          },
-          {
-            id: 'm2',
-            drugName: 'Heartgard Plus',
-            dosage: '1 tablet',
-            frequency: 'Monthly',
-            route: 'Oral',
-            startDate: '2024-01-01',
-            prescribedBy: 'Dr. Smith',
-          },
-        ]);
+        if (foundPet) {
+          // Calculate age from birthDate if available
+          let age = foundPet.age || 0;
+          if (foundPet.birthDate) {
+            const birthDate = new Date(foundPet.birthDate);
+            const today = new Date();
+            age = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          }
 
-        setConditions([
-          {
-            id: 'c1',
-            name: 'Seasonal Allergies',
-            diagnosedDate: '2023-05-20',
-            severity: 'moderate',
-            notes: 'Worse in spring and fall',
-          },
-          {
-            id: 'c2',
-            name: 'Arthritis',
-            diagnosedDate: '2024-02-10',
-            severity: 'mild',
-            notes: 'In left hip',
-          },
-        ]);
+          setPet({
+            id: foundPet.id,
+            name: foundPet.name,
+            species: foundPet.species || 'Dog',
+            breed: foundPet.breed || 'Unknown',
+            age: age,
+            weight: foundPet.weight || 0,
+            birthDate: foundPet.birthDate || '',
+            imageUrl: foundPet.photo,
+          });
 
-        setAllergies([
-          {
-            id: 'a1',
-            allergen: 'Chicken',
-            reaction: 'Skin irritation',
-            severity: 'moderate',
-          },
-        ]);
+          // Load medications for this pet from localStorage
+          const savedMeds = localStorage.getItem(`petcheck_medications_${id}`);
+          if (savedMeds) {
+            setMedications(JSON.parse(savedMeds));
+          } else {
+            setMedications([]);
+          }
 
-        setLoading(false);
-      }, 500);
+          // Load conditions for this pet from localStorage
+          const savedConditions = localStorage.getItem(`petcheck_conditions_${id}`);
+          if (savedConditions) {
+            setConditions(JSON.parse(savedConditions));
+          } else {
+            setConditions([]);
+          }
+
+          // Load allergies for this pet from localStorage
+          const savedAllergies = localStorage.getItem(`petcheck_allergies_${id}`);
+          if (savedAllergies) {
+            setAllergies(JSON.parse(savedAllergies));
+          } else {
+            setAllergies([]);
+          }
+
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Pet not found
+      setError('Pet not found');
+      setLoading(false);
     } catch (err) {
       setError('Failed to load pet details. Please try again.');
       setLoading(false);
@@ -153,21 +147,25 @@ export const PetDetailPage: React.FC = () => {
   const handleSaveMedication = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let updatedMedications: Medication[];
       if (editingMedication) {
         // Update existing medication
-        setMedications(medications.map(m =>
+        updatedMedications = medications.map(m =>
           m.id === editingMedication.id
             ? { ...editingMedication, ...medicationForm }
             : m
-        ));
+        );
       } else {
         // Add new medication
         const newMedication: Medication = {
           id: `m${Date.now()}`,
           ...medicationForm,
         };
-        setMedications([...medications, newMedication]);
+        updatedMedications = [...medications, newMedication];
       }
+      setMedications(updatedMedications);
+      // Save to localStorage
+      localStorage.setItem(`petcheck_medications_${id}`, JSON.stringify(updatedMedications));
       resetMedicationForm();
     } catch (err) {
       alert('Failed to save medication. Please try again.');
@@ -203,7 +201,10 @@ export const PetDetailPage: React.FC = () => {
   };
 
   const handleDeleteMedication = (medicationId: string) => {
-    setMedications(medications.filter(m => m.id !== medicationId));
+    const updatedMedications = medications.filter(m => m.id !== medicationId);
+    setMedications(updatedMedications);
+    // Save to localStorage
+    localStorage.setItem(`petcheck_medications_${id}`, JSON.stringify(updatedMedications));
     setDeletingMedicationId(null);
   };
 
