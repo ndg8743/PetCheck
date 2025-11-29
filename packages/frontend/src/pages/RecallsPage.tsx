@@ -46,18 +46,36 @@ export const RecallsPage: React.FC = () => {
   const fetchRecalls = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
-        setRecalls([
-          { id: '1', productName: 'ProHeart 6', manufacturer: 'Zoetis', recallDate: '2024-11-15', severity: 'moderate', reason: 'Potential contamination with foreign material', affectedLots: ['LOT123456', 'LOT123457', 'LOT123458'], species: ['Dog'], status: 'active', details: 'Zoetis has voluntarily recalled specific lots of ProHeart 6 due to potential contamination with foreign material detected during routine quality testing.', actionRequired: 'Check your product lot number. If affected, discontinue use and consult your veterinarian for an alternative heartworm prevention medication.' },
-          { id: '2', productName: "Hill's Prescription Diet", manufacturer: "Hill's Pet Nutrition", recallDate: '2024-11-10', severity: 'high', reason: 'Elevated levels of vitamin D', species: ['Dog', 'Cat'], status: 'active', details: "Hill's Pet Nutrition is recalling select canned dog and cat food products due to potentially elevated levels of vitamin D, which can lead to serious health issues.", actionRequired: 'Stop feeding immediately. Contact your veterinarian if your pet shows signs of elevated vitamin D (increased thirst, urination, vomiting, or weight loss).' },
-          { id: '3', productName: 'Purina Pro Plan Veterinary Diets', manufacturer: 'Nestle Purina', recallDate: '2024-11-05', severity: 'low', reason: 'Incorrect product labeling', species: ['Dog'], status: 'active', details: 'Certain bags were mislabeled and may contain a different formula than indicated on the package.', actionRequired: 'Check product packaging. If affected, return to place of purchase for a full refund or exchange.' },
-          { id: '4', productName: 'Adequan Canine', manufacturer: 'American Regent', recallDate: '2024-10-20', severity: 'moderate', reason: 'Packaging defect', affectedLots: ['LOT987654'], species: ['Dog'], status: 'resolved', details: 'Voluntary recall due to potential packaging defect that could affect sterility.', actionRequired: 'Recall resolved. No further action needed for new purchases.' },
-          { id: '5', productName: 'Merck Nobivac Canine Vaccine', manufacturer: 'Merck Animal Health', recallDate: '2024-10-15', severity: 'high', reason: 'Lack of sterility assurance', affectedLots: ['LOT555666', 'LOT555667'], species: ['Dog'], status: 'resolved', details: 'Recall due to lack of sterility assurance in specific lots.', actionRequired: 'Recall resolved. Consult your veterinarian if your dog received vaccine from affected lots.' },
-        ]);
-        setLoading(false);
-      }, 500);
+      setError(null);
+
+      const params = new URLSearchParams();
+      params.set('limit', '50');
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/recalls?${params}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.recalls) {
+        const transformedRecalls: Recall[] = data.data.recalls.map((recall: any) => ({
+          id: recall.id || recall.recallNumber || Math.random().toString(),
+          productName: recall.productDescription || recall.productName || 'Unknown Product',
+          manufacturer: recall.recallingFirm || recall.manufacturer || 'Unknown',
+          recallDate: recall.recallInitiationDate || recall.reportDate || new Date().toISOString().split('T')[0],
+          severity: recall.classification === 'Class I' ? 'high' : recall.classification === 'Class II' ? 'moderate' : 'low',
+          reason: recall.reasonForRecall || recall.reason || 'See details',
+          affectedLots: recall.codeInfo ? [recall.codeInfo] : [],
+          species: recall.species || ['Dog', 'Cat'],
+          status: recall.status?.toLowerCase() === 'ongoing' ? 'active' : 'resolved',
+          details: recall.productDescription || recall.details || '',
+          actionRequired: recall.voluntaryMandated || 'Contact your veterinarian if you have this product.',
+        }));
+        setRecalls(transformedRecalls);
+      } else {
+        setRecalls([]);
+      }
+      setLoading(false);
     } catch (err) {
-      setError('Failed to load recalls. Please try again.');
+      console.error('Failed to fetch recalls:', err);
+      setRecalls([]);
       setLoading(false);
     }
   };
