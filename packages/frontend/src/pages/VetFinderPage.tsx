@@ -84,6 +84,7 @@ export const VetFinderPage: React.FC = () => {
       setLoading(false);
     } catch (err) {
       console.error('Failed to search vets:', err);
+      setError(err instanceof Error ? err.message : 'Failed to search for veterinarians. Please try again.');
       setClinics([]);
       setLoading(false);
     }
@@ -133,6 +134,7 @@ export const VetFinderPage: React.FC = () => {
       setLoading(false);
     } catch (err) {
       console.error('Failed to search vets by address:', err);
+      setError(err instanceof Error ? err.message : 'Failed to search for veterinarians. Please try again.');
       setClinics([]);
       setLoading(false);
     }
