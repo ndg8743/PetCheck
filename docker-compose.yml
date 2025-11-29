@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: petcheck-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: petcheck-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=petcheck-dev-secret-change-in-production-1234567890
+      - JWT_EXPIRES_IN=7d
+      - FRONTEND_URL=http://localhost:5173
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - LOG_LEVEL=debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/shared:/app/packages/shared
+      - ./packages/backend:/app/packages/backend
+      - /app/packages/backend/node_modules
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: petcheck-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+    depends_on:
+      - backend
+    volumes:
+      - ./packages/shared:/app/packages/shared
+      - ./packages/frontend:/app/packages/frontend
+      - /app/packages/frontend/node_modules
+
+volumes:
+  redis-data:

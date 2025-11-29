@@ -1,0 +1,29 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy root package files
+COPY package*.json ./
+
+# Copy shared package
+COPY packages/shared/package*.json ./packages/shared/
+
+# Copy frontend package
+COPY packages/frontend/package*.json ./packages/frontend/
+
+# Install all dependencies
+RUN npm install
+
+# Copy shared source and build
+COPY packages/shared ./packages/shared
+RUN npm run build:shared
+
+# Copy frontend source
+COPY packages/frontend ./packages/frontend
+
+# Expose Vite dev server port
+EXPOSE 5173
+
+# Start frontend with host flag for Docker
+WORKDIR /app/packages/frontend
+CMD ["npx", "vite", "--host", "0.0.0.0"]
