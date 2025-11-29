@@ -182,10 +182,15 @@ export const DrugDetailPage: React.FC = () => {
   };
 
   const getSafetyScore = (): number => {
-    if (!drug) return 0;
+    if (!drug || drug.totalReports === 0) return 100; // No reports = no known issues
     const seriousPercentage = (drug.seriousReports / drug.totalReports) * 100;
     const deathPercentage = (drug.deathReports / drug.totalReports) * 100;
     return Math.max(0, Math.round(100 - seriousPercentage - (deathPercentage * 3)));
+  };
+
+  const getPercentage = (value: number, total: number): string => {
+    if (total === 0) return '0.0';
+    return ((value / total) * 100).toFixed(1);
   };
 
   if (loading) {
@@ -256,13 +261,13 @@ export const DrugDetailPage: React.FC = () => {
               <Card variant="warning" className="p-4 text-center">
                 <div className="text-3xl font-bold text-warning-600 dark:text-warning-400">{drug.seriousReports.toLocaleString()}</div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Serious Events ({((drug.seriousReports / drug.totalReports) * 100).toFixed(1)}%)
+                  Serious Events ({getPercentage(drug.seriousReports, drug.totalReports)}%)
                 </div>
               </Card>
               <Card variant="danger" className="p-4 text-center">
                 <div className="text-3xl font-bold text-accent-600 dark:text-accent-400">{drug.deathReports.toLocaleString()}</div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Deaths Reported ({((drug.deathReports / drug.totalReports) * 100).toFixed(1)}%)
+                  Deaths Reported ({getPercentage(drug.deathReports, drug.totalReports)}%)
                 </div>
               </Card>
             </div>
