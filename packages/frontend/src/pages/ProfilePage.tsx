@@ -7,6 +7,7 @@ import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { ConfirmDialog } from '../components/ui/Modal';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UserProfile {
   id: string;
@@ -52,6 +53,7 @@ const ToggleSwitch: React.FC<{
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,22 +79,31 @@ export const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [user]);
 
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
+
+      if (user) {
+        // Load from AuthContext user data
         setProfile({
-          id: 'user-123',
-          email: 'user@example.com',
-          name: 'John Doe',
-          phoneNumber: '(555) 123-4567',
+          id: user.id || '',
+          email: user.email || '',
+          name: user.name || '',
+          phoneNumber: '',
           timezone: 'America/New_York',
-          createdAt: '2024-01-15',
+          createdAt: user.createdAt || new Date().toISOString(),
         });
-        setLoading(false);
-      }, 500);
+
+        // Load notification preferences from localStorage
+        const savedNotifications = localStorage.getItem('petcheck_notifications');
+        if (savedNotifications) {
+          setNotifications(JSON.parse(savedNotifications));
+        }
+      }
+
+      setLoading(false);
     } catch (err) {
       setError('Failed to load profile. Please try again.');
       setLoading(false);
@@ -106,11 +117,18 @@ export const ProfilePage: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      setTimeout(() => {
-        setSuccessMessage('Profile updated successfully!');
-        setSaving(false);
-        setTimeout(() => setSuccessMessage(null), 3000);
-      }, 500);
+      // Update user in context and localStorage
+      if (user) {
+        const updatedUser = {
+          ...user,
+          name: profile.name,
+        };
+        updateUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      setSuccessMessage('Profile updated successfully!');
+      setSaving(false);
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setError('Failed to update profile. Please try again.');
       setSaving(false);
@@ -123,11 +141,11 @@ export const ProfilePage: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      setTimeout(() => {
-        setSuccessMessage('Notification preferences updated!');
-        setSaving(false);
-        setTimeout(() => setSuccessMessage(null), 3000);
-      }, 500);
+      // Save notification preferences to localStorage
+      localStorage.setItem('petcheck_notifications', JSON.stringify(notifications));
+      setSuccessMessage('Notification preferences updated!');
+      setSaving(false);
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setError('Failed to update preferences. Please try again.');
       setSaving(false);

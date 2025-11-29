@@ -111,14 +111,24 @@ export class RecallsService {
 
       logger.info(`Recalls search: ${recalls.length} results`);
       return result;
-    } catch (error) {
+    } catch (error: any) {
       // If we have stale data, return it on error
       if (cached?.stale) {
         logger.warn('Returning stale recalls data due to error');
         return cached.data;
       }
-      logger.error('Recalls search error:', error);
-      throw error;
+
+      // If FDA API returns no results (404) or other error, return empty
+      logger.error('Recalls search error:', error?.message || error);
+
+      // Return empty result instead of throwing
+      return {
+        recalls: [],
+        total: 0,
+        limit: params.limit || 20,
+        offset: params.offset || 0,
+        query: params,
+      };
     }
   }
 
