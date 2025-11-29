@@ -79,45 +79,33 @@ export const DashboardPage: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
-        setPets([
-          {
-            id: '1',
-            name: 'Max',
-            species: 'Dog',
-            breed: 'Golden Retriever',
-            age: 5,
-            weight: 65,
-            medications: [
-              { id: 'm1', drugName: 'Apoquel', dosage: '16mg', frequency: 'Twice daily', startDate: '2024-01-15' },
-              { id: 'm2', drugName: 'Heartgard Plus', dosage: '1 tablet', frequency: 'Monthly', startDate: '2024-01-01' },
-            ],
-            conditions: ['Allergies', 'Arthritis'],
-            allergies: ['Chicken'],
-          },
-          {
-            id: '2',
-            name: 'Luna',
-            species: 'Cat',
-            breed: 'Siamese',
-            age: 3,
-            weight: 10,
-            medications: [
-              { id: 'm3', drugName: 'Revolution Plus', dosage: '1 tube', frequency: 'Monthly', startDate: '2024-02-01' },
-            ],
-            conditions: ['Feline Asthma'],
-            allergies: [],
-          },
-        ]);
 
-        setAlerts([
-          { id: 'a1', type: 'recall', severity: 'high', title: 'Recall Alert: Heartgard Plus', message: 'FDA has issued a voluntary recall for certain lots of Heartgard Plus.', petId: '1', date: '2024-11-20' },
-          { id: 'a2', type: 'interaction', severity: 'moderate', title: 'Potential Interaction Detected', message: "Apoquel may interact with Max's current medications.", petId: '1', date: '2024-11-18' },
-          { id: 'a3', type: 'warning', severity: 'low', title: 'Medication Refill Reminder', message: 'Revolution Plus refill needed for Luna within 7 days.', petId: '2', date: '2024-11-15' },
-        ]);
+      // Load pets from localStorage
+      const savedPets = localStorage.getItem('petcheck_pets');
+      if (savedPets) {
+        const petData = JSON.parse(savedPets);
+        // Transform to dashboard format with empty medications/conditions
+        const dashboardPets = petData.map((pet: any) => ({
+          id: pet.id,
+          name: pet.name,
+          species: pet.species,
+          breed: pet.breed,
+          age: pet.age || 0,
+          weight: pet.weight || 0,
+          imageUrl: pet.imageUrl,
+          medications: pet.medications || [],
+          conditions: pet.conditions || [],
+          allergies: pet.allergies || [],
+        }));
+        setPets(dashboardPets);
+      } else {
+        setPets([]);
+      }
 
-        setLoading(false);
-      }, 500);
+      // No fake alerts - start empty
+      setAlerts([]);
+
+      setLoading(false);
     } catch (err) {
       setError('Failed to load dashboard data. Please try again.');
       setLoading(false);
@@ -330,9 +318,17 @@ export const DashboardPage: React.FC = () => {
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex gap-4">
-                          <div className="w-16 h-16 bg-gradient-to-br from-primary-400 to-secondary-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                            {pet.name.charAt(0)}
-                          </div>
+                          {pet.imageUrl ? (
+                            <img
+                              src={pet.imageUrl}
+                              alt={pet.name}
+                              className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-gradient-to-br from-primary-400 to-secondary-500 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                              {pet.name.charAt(0)}
+                            </div>
+                          )}
                           <div>
                             <h3 className="text-xl font-bold text-navy-900 dark:text-white">{pet.name}</h3>
                             <p className="text-gray-600 dark:text-gray-400">{pet.breed}</p>
