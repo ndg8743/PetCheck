@@ -1,0 +1,32 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy root package files
+COPY package*.json ./
+
+# Copy shared package
+COPY packages/shared/package*.json ./packages/shared/
+
+# Copy backend package
+COPY packages/backend/package*.json ./packages/backend/
+
+# Install all dependencies
+RUN npm install
+
+# Copy shared source and build
+COPY packages/shared ./packages/shared
+RUN npm run build:shared
+
+# Copy backend source
+COPY packages/backend ./packages/backend
+
+# Copy env file
+COPY packages/backend/.env ./packages/backend/.env
+
+EXPOSE 3001
+
+WORKDIR /app/packages/backend
+
+# Run with ts-node transpile-only (skips type checking)
+CMD ["npx", "ts-node", "--transpile-only", "src/index.ts"]
