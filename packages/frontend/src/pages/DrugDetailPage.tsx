@@ -99,30 +99,34 @@ export const DrugDetailPage: React.FC = () => {
       const aeSummary = aeResult.success ? aeResult.data : null;
 
       // Transform drug data to match our interface
+      // Use drug data stats first, fallback to adverse events summary
+      const totalReports = drugData.totalReports || aeSummary?.totalReports || 0;
+      const seriousReports = drugData.seriousReports || aeSummary?.seriousReports || 0;
+      const deathReports = drugData.deathReports || aeSummary?.deathReports || 0;
+
       setDrug({
         id: drugData.id || id || '',
         name: drugData.tradeName || drugData.genericName || 'Unknown',
-        genericName: drugData.genericName || drugData.activeIngredients?.join(', ') || '',
+        genericName: drugData.genericName || drugData.activeIngredients?.[0]?.name || '',
         manufacturer: drugData.manufacturer || 'Unknown',
-        species: drugData.approvedSpecies || [],
-        description: drugData.dosageForm
-          ? `${drugData.tradeName || drugData.genericName} is a ${drugData.dosageForm.toLowerCase()} ${drugData.drugClass || 'medication'} for veterinary use.`
-          : `Veterinary ${drugData.drugClass || 'medication'} for ${(drugData.approvedSpecies || []).join(', ') || 'animals'}.`,
+        species: drugData.approvedSpecies?.map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)) || [],
+        description: drugData.description ||
+          (drugData.indications?.length > 0 ? drugData.indications.join('. ') + '.' :
+          `Veterinary ${drugData.drugClass?.[0] || 'medication'} for ${(drugData.approvedSpecies || []).join(', ') || 'animals'}.`),
         indications: drugData.indications || [
           `Approved for use in ${(drugData.approvedSpecies || []).join(', ') || 'animals'}`,
-          drugData.route ? `Administered via ${drugData.route}` : null,
         ].filter(Boolean),
         warnings: drugData.warnings || [
           'Always consult with a veterinarian before use',
           'Follow dosage instructions carefully',
           'Monitor for adverse reactions',
         ],
-        totalReports: aeSummary?.totalReports || 0,
-        seriousReports: aeSummary?.seriousReports || 0,
-        deathReports: aeSummary?.deathReports || 0,
+        totalReports,
+        seriousReports,
+        deathReports,
         hasRecall: drugData.hasActiveRecall || false,
         recallDetails: drugData.recallDetails,
-        lastUpdated: drugData.lastUpdated || new Date().toISOString().split('T')[0],
+        lastUpdated: drugData.lastUpdated ? new Date(drugData.lastUpdated).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       });
 
       // Set adverse events from summary
