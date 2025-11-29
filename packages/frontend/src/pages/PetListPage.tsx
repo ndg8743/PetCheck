@@ -44,15 +44,18 @@ export const PetListPage: React.FC = () => {
   const fetchPets = async () => {
     try {
       setLoading(true);
-      setTimeout(() => {
-        setPets([
-          { id: '1', name: 'Max', species: 'Dog', breed: 'Golden Retriever', age: 5, weight: 65, medicationCount: 2, conditionCount: 2, allergyCount: 1, lastCheckup: '2024-10-15' },
-          { id: '2', name: 'Luna', species: 'Cat', breed: 'Siamese', age: 3, weight: 10, medicationCount: 1, conditionCount: 1, allergyCount: 0, lastCheckup: '2024-11-01' },
-          { id: '3', name: 'Charlie', species: 'Dog', breed: 'Beagle', age: 7, weight: 25, medicationCount: 3, conditionCount: 3, allergyCount: 2, lastCheckup: '2024-09-20' },
-          { id: '4', name: 'Bella', species: 'Cat', breed: 'Persian', age: 2, weight: 8, medicationCount: 0, conditionCount: 0, allergyCount: 0, lastCheckup: '2024-11-10' },
-        ]);
-        setLoading(false);
-      }, 500);
+      // TODO: Replace with actual API call to fetch user's pets
+      // const response = await api.get('/pets');
+      // setPets(response.data);
+
+      // For now, load from localStorage or start empty
+      const savedPets = localStorage.getItem('petcheck_pets');
+      if (savedPets) {
+        setPets(JSON.parse(savedPets));
+      } else {
+        setPets([]);
+      }
+      setLoading(false);
     } catch (err) {
       setError('Failed to load pets. Please try again.');
       setLoading(false);
@@ -77,7 +80,9 @@ export const PetListPage: React.FC = () => {
 
   const handleDeletePet = async () => {
     try {
-      setPets(pets.filter(p => p.id !== deleteConfirm.petId));
+      const updatedPets = pets.filter(p => p.id !== deleteConfirm.petId);
+      setPets(updatedPets);
+      localStorage.setItem('petcheck_pets', JSON.stringify(updatedPets));
       setDeleteConfirm({ open: false, petId: '', petName: '' });
     } catch (err) {
       alert('Failed to delete pet. Please try again.');

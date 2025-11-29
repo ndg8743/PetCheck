@@ -25,3 +25,7 @@ export type { InteractionWarningProps, DrugInteraction, InteractionSummaryProps 
 // Disclaimer
 export { Disclaimer, TrustIndicator } from './Disclaimer';
 export type { DisclaimerProps, TrustIndicatorProps } from './Disclaimer';
+
+// OnboardingTutorial
+export { OnboardingTutorial, useTutorial } from './OnboardingTutorial';
+export type { } from './OnboardingTutorial';

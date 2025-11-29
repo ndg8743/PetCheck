@@ -32,6 +32,30 @@ export const PetCreatePage: React.FC = () => {
     microchipId: '',
     notes: '',
   });
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be less than 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -50,18 +74,32 @@ export const PetCreatePage: React.FC = () => {
     setError(null);
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/pets', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData),
-      // });
+      // Create new pet object
+      const newPet = {
+        id: Date.now().toString(),
+        name: formData.name,
+        species: formData.species.charAt(0).toUpperCase() + formData.species.slice(1),
+        breed: formData.breed,
+        age: formData.birthDate ? Math.floor((Date.now() - new Date(formData.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
+        weight: parseFloat(formData.weight) || 0,
+        imageUrl: photoPreview || undefined,
+        medicationCount: 0,
+        conditionCount: 0,
+        allergyCount: 0,
+        birthDate: formData.birthDate,
+        sex: formData.sex,
+        color: formData.color,
+        microchipId: formData.microchipId,
+        notes: formData.notes,
+      };
 
-      // Mock success
-      setTimeout(() => {
-        // Navigate to the new pet's detail page
-        navigate('/pets/1'); // Use actual pet ID from response
-      }, 500);
+      // Save to localStorage
+      const existingPets = JSON.parse(localStorage.getItem('petcheck_pets') || '[]');
+      existingPets.push(newPet);
+      localStorage.setItem('petcheck_pets', JSON.stringify(existingPets));
+
+      // Navigate to the pet list
+      navigate('/pets');
     } catch (err) {
       setError('Failed to create pet profile. Please try again.');
       setLoading(false);
@@ -151,6 +189,61 @@ export const PetCreatePage: React.FC = () => {
                       </div>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Pet Photo */}
+              <div className="mb-8">
+                <h2 className="text-lg font-display font-semibold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Pet Photo
+                </h2>
+
+                <div className="flex flex-col items-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    className="hidden"
+                    id="pet-photo"
+                  />
+
+                  {photoPreview ? (
+                    <div className="relative">
+                      <img
+                        src={photoPreview}
+                        alt="Pet preview"
+                        className="w-32 h-32 rounded-full object-cover border-4 border-primary-200 dark:border-primary-800 shadow-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-colors"
+                        aria-label="Remove photo"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="pet-photo"
+                      className="w-32 h-32 rounded-full border-2 border-dashed border-slate-300 dark:border-navy-600 hover:border-primary-400 dark:hover:border-primary-500 bg-slate-50 dark:bg-navy-800 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                    >
+                      <svg className="w-8 h-8 text-slate-400 dark:text-slate-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 text-center px-2">Add Photo</span>
+                    </label>
+                  )}
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
+                    Optional - JPG, PNG up to 5MB
+                  </p>
                 </div>
               </div>
 

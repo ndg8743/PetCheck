@@ -68,19 +68,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       input: 'pl-10 pr-12 py-2.5 text-sm',
       icon: 'h-4 w-4',
       iconLeft: 'pl-3',
-      iconRight: 'pr-3',
+      button: 'p-2',
     },
     md: {
       input: 'pl-12 pr-14 py-3.5 text-base',
       icon: 'h-5 w-5',
       iconLeft: 'pl-4',
-      iconRight: 'pr-4',
+      button: 'p-2.5',
     },
     lg: {
       input: 'pl-14 pr-16 py-4.5 text-lg',
       icon: 'h-6 w-6',
       iconLeft: 'pl-5',
-      iconRight: 'pr-5',
+      button: 'p-3',
     },
   };
 
@@ -169,27 +169,25 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           />
 
           {/* Right side - search button */}
-          <div className="absolute inset-y-0 right-0 flex items-center pr-1.5">
+          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
             <button
               type="submit"
               disabled={isLoading || !query.trim()}
               className={`
-                flex items-center justify-center gap-2
-                ${size === 'lg' ? 'px-5 py-2.5 text-base' : size === 'md' ? 'px-4 py-2 text-sm' : 'px-3 py-1.5 text-sm'}
-                bg-primary-600 hover:bg-primary-700
-                text-white font-medium
+                flex items-center justify-center
+                ${sizes.button}
+                bg-primary-500/10 hover:bg-primary-500
+                text-primary-600 hover:text-white
                 rounded-lg
-                disabled:opacity-50 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
-                dark:focus:ring-offset-navy-800
+                disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-primary-500/10 disabled:hover:text-primary-600
+                focus:outline-none focus:ring-2 focus:ring-primary-500
                 transition-all duration-200
-                shadow-sm hover:shadow-md
               `}
               aria-label="Search"
             >
               {isLoading ? (
                 <svg
-                  className="animate-spin h-4 w-4"
+                  className={`animate-spin ${sizes.icon}`}
                   fill="none"
                   viewBox="0 0 24 24"
                 >
@@ -208,22 +206,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                   />
                 </svg>
               ) : (
-                <>
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">Search</span>
-                </>
+                <svg
+                  className={sizes.icon}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
               )}
             </button>
           </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { AppShell } from './components/layout/AppShell';
+import { OnboardingTutorial } from './components/common/OnboardingTutorial';
 
 // Import actual pages
 import { HomePage } from './pages/HomePage';
@@ -65,8 +66,22 @@ const WithAppShell = ({ children }: { children: React.ReactNode }) => (
 );
 
 function App() {
+  const { isNewUser, clearNewUserFlag } = useAuth();
+
+  const handleTutorialComplete = () => {
+    localStorage.setItem('petcheck_tutorial_completed', 'true');
+    clearNewUserFlag();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-navy-950">
+      {/* Onboarding Tutorial for new users */}
+      <OnboardingTutorial
+        isOpen={isNewUser}
+        onClose={clearNewUserFlag}
+        onComplete={handleTutorialComplete}
+      />
+
       <Routes>
         {/* Public routes (no AppShell) */}
         <Route path="/" element={<HomePage />} />
