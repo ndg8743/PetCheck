@@ -12,8 +12,10 @@ import './index.css';
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // In dev mode, SW is served as ES module; in prod, it's bundled as classic script
+    const swOptions = import.meta.env.DEV ? { type: 'module' as const } : undefined;
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sw.js', swOptions)
       .then((registration) => {
         console.log('SW registered: ', registration);
       })
