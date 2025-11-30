@@ -70,16 +70,6 @@ export default defineConfig(({ mode }) => ({
         // Remove console logs in production
         drop_console: true,
         drop_debugger: true,
-        // Aggressive dead code elimination
-        dead_code: true,
-        // Remove unused variables
-        unused: true,
-      },
-      mangle: {
-        // Mangle property names for obfuscation
-        properties: {
-          regex: /^_/,
-        },
       },
       format: {
         // Remove comments
