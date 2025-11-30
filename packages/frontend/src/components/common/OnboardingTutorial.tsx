@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { useNotifications } from '../../contexts/NotificationContext';
+import api from '../../lib/api';
 
 interface TutorialStep {
   title: string;
@@ -132,7 +132,6 @@ export const OnboardingTutorial: React.FC<OnboardingTutorialProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const navigate = useNavigate();
-  const { isSupported, subscribe, sendTestNotification, requestPermission } = useNotifications();
 
   useEffect(() => {
     if (isOpen) {
@@ -167,26 +166,58 @@ export const OnboardingTutorial: React.FC<OnboardingTutorialProps> = ({
   const handleAction = async () => {
     if (step.action) {
       if (step.action.isNotificationTest) {
-        // Handle notification test
+        // Handle notification test directly
         setNotificationStatus('loading');
         try {
-          if (!isSupported) {
+          // Check if notifications are supported
+          if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
             setNotificationStatus('error');
             return;
           }
-          const permission = await requestPermission();
-          if (permission === 'granted') {
-            const subscribed = await subscribe();
-            if (subscribed) {
-              await sendTestNotification();
-              setNotificationStatus('success');
-            } else {
-              setNotificationStatus('error');
-            }
-          } else {
+
+          // Request permission
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
             setNotificationStatus('error');
+            return;
           }
-        } catch {
+
+          // Get VAPID public key
+          const vapidResponse = await api.get('/notifications/vapid-public-key');
+          if (!vapidResponse.data?.success || !vapidResponse.data?.data?.publicKey) {
+            setNotificationStatus('error');
+            return;
+          }
+
+          // Subscribe to push
+          const registration = await navigator.serviceWorker.ready;
+          const publicKey = vapidResponse.data.data.publicKey;
+          const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
+          const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+          const rawData = window.atob(base64);
+          const outputArray = new Uint8Array(rawData.length);
+          for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+          }
+
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: outputArray.buffer as ArrayBuffer,
+          });
+
+          // Send subscription to server
+          const subscriptionJson = subscription.toJSON();
+          await api.post('/notifications/subscribe', {
+            endpoint: subscriptionJson.endpoint,
+            expirationTime: subscriptionJson.expirationTime,
+            keys: subscriptionJson.keys,
+          });
+
+          // Send test notification
+          await api.post('/notifications/test');
+          setNotificationStatus('success');
+        } catch (err) {
+          console.error('Notification test failed:', err);
           setNotificationStatus('error');
         }
       } else if (step.action.path) {
