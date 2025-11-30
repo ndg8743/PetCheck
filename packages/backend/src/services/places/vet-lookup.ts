@@ -49,7 +49,8 @@ interface GooglePlacesResponse {
   results: Array<{
     place_id: string;
     name: string;
-    formatted_address: string;
+    formatted_address?: string;
+    vicinity?: string; // Nearby Search returns vicinity, not formatted_address
     geometry: {
       location: {
         lat: number;
@@ -152,7 +153,7 @@ export class VetLookupService {
       let clinics: VetClinic[] = response.data.results.map((place) => ({
         placeId: place.place_id,
         name: place.name,
-        address: place.formatted_address,
+        address: place.formatted_address || place.vicinity || '',
         rating: place.rating,
         totalRatings: place.user_ratings_total,
         openNow: place.opening_hours?.open_now,
@@ -184,6 +185,7 @@ export class VetLookupService {
             if (details) {
               return {
                 ...clinic,
+                address: details.address || clinic.address,
                 phone: details.phone,
                 website: details.website,
                 openingHours: details.openingHours || clinic.openingHours,
@@ -237,7 +239,7 @@ export class VetLookupService {
         {
           params: {
             place_id: placeId,
-            fields: 'formatted_phone_number,website,opening_hours',
+            fields: 'formatted_address,formatted_phone_number,website,opening_hours',
             key: config.google.placesApiKey,
           },
           timeout: 5000,
@@ -250,6 +252,7 @@ export class VetLookupService {
 
       const place = response.data.result;
       return {
+        address: place.formatted_address,
         phone: place.formatted_phone_number,
         website: place.website,
         openingHours: place.opening_hours?.weekday_text,
