@@ -10,3 +10,4 @@ export * from './interaction';
 export * from './user';
 export * from './pet';
 export * from './api';
+export * from './notification';

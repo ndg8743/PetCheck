@@ -15,6 +15,7 @@ import interactionsRoutes from './interactions';
 import petsRoutes from './pets';
 import vetsRoutes from './vets';
 import healthRoutes from './health';
+import notificationsRoutes from './notifications';
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.use('/recalls', recallsRoutes);
 router.use('/interactions', interactionsRoutes);
 router.use('/pets', petsRoutes);
 router.use('/vets', vetsRoutes);
+router.use('/notifications', notificationsRoutes);
 
 // API root endpoint
 router.get('/', (req, res) => {
@@ -50,6 +52,7 @@ router.get('/', (req, res) => {
         interactions: '/api/interactions',
         pets: '/api/pets',
         vets: '/api/vets',
+        notifications: '/api/notifications',
       },
       documentation: {
         github: 'https://github.com/yourusername/petcheck',

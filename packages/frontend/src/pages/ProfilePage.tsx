@@ -8,6 +8,7 @@ import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { ConfirmDialog } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 
 interface UserProfile {
   id: string;
@@ -54,6 +55,16 @@ const ToggleSwitch: React.FC<{
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
+  const {
+    isSupported: pushSupported,
+    isSubscribed: pushSubscribed,
+    isLoading: pushLoading,
+    permission: pushPermission,
+    error: pushError,
+    subscribe: subscribeToPush,
+    unsubscribe: unsubscribeFromPush,
+    sendTestNotification,
+  } = useNotifications();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -281,8 +292,89 @@ export const ProfilePage: React.FC = () => {
             </form>
           </Card>
 
-          {/* Notification Preferences */}
+          {/* Push Notifications */}
           <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '0.1s' }}>
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-navy-900 dark:text-white mb-6 flex items-center gap-2">
+                <svg className="w-5 h-5 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Push Notifications
+              </h2>
+
+              {!pushSupported ? (
+                <Alert variant="warning" className="mb-4">
+                  Push notifications are not supported in this browser.
+                </Alert>
+              ) : pushPermission === 'denied' ? (
+                <Alert variant="danger" className="mb-4">
+                  Push notifications are blocked. Please enable them in your browser settings.
+                </Alert>
+              ) : (
+                <>
+                  {pushError && (
+                    <Alert variant="danger" className="mb-4">
+                      {pushError}
+                    </Alert>
+                  )}
+
+                  <div className="p-4 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl mb-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-navy-900 dark:text-white mb-1">
+                          {pushSubscribed ? 'Push Notifications Enabled' : 'Enable Push Notifications'}
+                        </h3>
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          {pushSubscribed
+                            ? 'You will receive real-time alerts for drug recalls and safety updates.'
+                            : 'Get instant alerts on your device for drug recalls and safety updates.'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pushSubscribed ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const success = await sendTestNotification();
+                                if (success) {
+                                  setSuccessMessage('Test notification sent!');
+                                  setTimeout(() => setSuccessMessage(null), 3000);
+                                }
+                              }}
+                              disabled={pushLoading}
+                            >
+                              Test
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={unsubscribeFromPush}
+                              disabled={pushLoading}
+                              className="border-accent-300 text-accent-600 hover:bg-accent-50"
+                            >
+                              {pushLoading ? 'Processing...' : 'Disable'}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            onClick={subscribeToPush}
+                            disabled={pushLoading}
+                          >
+                            {pushLoading ? 'Enabling...' : 'Enable Notifications'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </Card>
+
+          {/* Notification Preferences */}
+          <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '0.15s' }}>
             <div className="p-6">
               <h2 className="text-xl font-semibold text-navy-900 dark:text-white mb-6 flex items-center gap-2">
                 <svg className="w-5 h-5 text-warning-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -331,7 +423,7 @@ export const ProfilePage: React.FC = () => {
           </Card>
 
           {/* Privacy & Data */}
-          <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+          <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '0.2s' }}>
             <div className="p-6">
               <h2 className="text-xl font-semibold text-navy-900 dark:text-white mb-6 flex items-center gap-2">
                 <svg className="w-5 h-5 text-secondary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -373,7 +465,7 @@ export const ProfilePage: React.FC = () => {
           </Card>
 
           {/* Danger Zone */}
-          <Card variant="danger" className="animate-fade-up" style={{ animationDelay: '0.2s' }}>
+          <Card variant="danger" className="animate-fade-up" style={{ animationDelay: '0.25s' }}>
             <div className="p-6">
               <h2 className="text-xl font-semibold text-accent-600 dark:text-accent-400 mb-6 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
