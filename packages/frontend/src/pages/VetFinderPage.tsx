@@ -408,7 +408,7 @@ export const VetFinderPage: React.FC = () => {
                             <Button
                               variant="outline"
                               onClick={() => window.open(
-                                `https://maps.google.com/?q=${encodeURIComponent(`${clinic.address}, ${clinic.city}, ${clinic.state} ${clinic.zipCode}`)}`,
+                                `https://maps.google.com/maps/dir/?api=1&destination=${encodeURIComponent(clinic.address || clinic.name)}`,
                                 '_blank'
                               )}
                               leftIcon={
