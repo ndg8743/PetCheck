@@ -16,13 +16,23 @@ export const config = {
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3001',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
-  // Redis
+  // Redis (caching & rate limiting)
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
     db: parseInt(process.env.REDIS_DB || '0', 10),
     keyPrefix: 'petcheck:',
+  },
+
+  // PostgreSQL (user data persistence)
+  database: {
+    host: process.env.DATABASE_HOST || 'localhost',
+    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
+    name: process.env.DATABASE_NAME || 'petcheck',
+    user: process.env.DATABASE_USER || 'petcheck',
+    password: process.env.DATABASE_PASSWORD || 'petcheck_dev',
+    poolSize: parseInt(process.env.DATABASE_POOL_SIZE || '10', 10),
   },
 
   // JWT

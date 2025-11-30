@@ -9,7 +9,9 @@ import compression from 'compression';
 import { config, validateConfig } from './config';
 import { createLogger } from './services/logger';
 import { redis, isRedisHealthy } from './services/redis';
+import { initializeDatabase, isDatabaseHealthy, closeDatabase } from './services/database';
 import { greenBookService } from './services/openfda';
+import { googleAuthService } from './services/auth';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import routes from './routes';
 
@@ -77,6 +79,32 @@ async function startServer(): Promise<void> {
     logger.info('Redis connected successfully');
   }
 
+  // Initialize PostgreSQL database
+  try {
+    await initializeDatabase();
+    const dbHealthy = await isDatabaseHealthy();
+    if (dbHealthy) {
+      logger.info('PostgreSQL database initialized and connected');
+    } else {
+      logger.error('PostgreSQL database health check failed');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize PostgreSQL database:', error);
+    process.exit(1);
+  }
+
+  // Start periodic session cleanup (every hour)
+  setInterval(async () => {
+    try {
+      const cleaned = await googleAuthService.cleanupExpiredSessions();
+      if (cleaned > 0) {
+        logger.info(`Cleaned up ${cleaned} expired sessions`);
+      }
+    } catch (error) {
+      logger.warn('Session cleanup failed:', error);
+    }
+  }, 60 * 60 * 1000);
+
   // Initialize Green Book drug database
   try {
     await greenBookService.initialize();
@@ -105,6 +133,14 @@ async function startServer(): Promise<void> {
         logger.info('Redis connection closed');
       } catch (error) {
         logger.error('Error closing Redis:', error);
+      }
+
+      // Close PostgreSQL connection
+      try {
+        await closeDatabase();
+        logger.info('PostgreSQL connection closed');
+      } catch (error) {
+        logger.error('Error closing PostgreSQL:', error);
       }
 
       process.exit(0);

@@ -162,7 +162,7 @@ export class AdverseEventsService {
     const fieldMapping: Record<string, string> = {
       time_series: 'original_receive_date',
       reaction: 'reaction.veddra_term_name.exact',
-      species: 'animal.species.name.exact',
+      species: 'animal.species.exact', // Note: may not be aggregatable in all cases
       outcome: 'outcome.medical_status.exact',
       drug: 'drug.brand_name.exact',
       route: 'drug.route.exact',
@@ -199,38 +199,70 @@ export class AdverseEventsService {
 
   /**
    * Get a summary for a specific drug
+   * @param drugName - The brand name of the drug
+   * @param genericName - Optional generic name (active ingredient) for better search results
    */
-  async getDrugSummary(drugName: string): Promise<AdverseEventSummary> {
+  async getDrugSummary(drugName: string, genericName?: string): Promise<AdverseEventSummary> {
     const searchParams: AdverseEventSearchParams = {
       drugName,
+      activeIngredient: genericName, // Use generic name for active ingredient search
     };
 
     try {
-      // Fetch multiple aggregations in parallel
-      const [speciesAgg, outcomeAgg, reactionAgg, timeSeriesAgg, totalResult] = await Promise.all([
-        this.getAggregation(searchParams, 'species', 20),
+      // Fetch multiple aggregations in parallel using allSettled to handle partial failures
+      const results = await Promise.allSettled([
         this.getAggregation(searchParams, 'outcome', 10),
         this.getAggregation(searchParams, 'reaction', 20),
         this.getAggregation(searchParams, 'time_series', 60), // Last 5 years monthly
         this.search({ ...searchParams, limit: 1 }),
       ]);
 
+      // Extract results, using empty arrays for failed requests
+      const outcomeAgg = results[0].status === 'fulfilled' ? results[0].value : null;
+      const reactionAgg = results[1].status === 'fulfilled' ? results[1].value : null;
+      const timeSeriesAgg = results[2].status === 'fulfilled' ? results[2].value : null;
+      const totalResult = results[3].status === 'fulfilled' ? results[3].value : null;
+
+      // Log any failures
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const fieldNames = ['outcome', 'reaction', 'time_series', 'search'];
+          logger.warn(`Aggregation ${fieldNames[index]} failed:`, result.reason?.message || result.reason);
+        }
+      });
+
+      const totalReports = totalResult?.total || 0;
+
+      // Calculate serious and death reports from outcome breakdown
+      let seriousReports = 0;
+      let deathReports = 0;
+      if (outcomeAgg?.data) {
+        for (const item of outcomeAgg.data) {
+          const outcome = this.mapOutcome(item.term);
+          if (outcome === 'died' || outcome === 'euthanized') {
+            deathReports += item.count;
+            seriousReports += item.count;
+          } else if (outcome !== 'not_serious' && outcome !== 'unknown') {
+            seriousReports += item.count;
+          }
+        }
+      }
+
       return {
         drugName,
-        totalReports: totalResult.total,
-        speciesBreakdown: speciesAgg.data.map((d) => ({
-          species: d.term,
-          count: d.count,
-        })),
-        outcomeBreakdown: outcomeAgg.data.map((d) => ({
+        totalReports,
+        seriousReports,
+        deathReports,
+        speciesBreakdown: [], // Species aggregation not available in FDA API
+        outcomeBreakdown: outcomeAgg?.data.map((d) => ({
           outcome: this.mapOutcome(d.term),
           count: d.count,
-        })),
-        topReactions: reactionAgg.data.slice(0, 10).map((d) => ({
+        })) || [],
+        topReactions: reactionAgg?.data.slice(0, 10).map((d) => ({
           reaction: d.term,
           count: d.count,
-        })),
-        timeSeriesMonthly: this.formatTimeSeries(timeSeriesAgg.data),
+        })) || [],
+        timeSeriesMonthly: timeSeriesAgg ? this.formatTimeSeries(timeSeriesAgg.data) : [],
         lastUpdated: new Date(),
       };
     } catch (error) {
@@ -239,6 +271,8 @@ export class AdverseEventsService {
       return {
         drugName,
         totalReports: 0,
+        seriousReports: 0,
+        deathReports: 0,
         speciesBreakdown: [],
         outcomeBreakdown: [],
         topReactions: [],
@@ -259,18 +293,25 @@ export class AdverseEventsService {
         .map((s) => getSpeciesByName(s))
         .flatMap((s) => s?.openFdaTerms || []);
       if (speciesTerms.length > 0) {
-        queryParts.push(`animal.species.name:(${speciesTerms.join('+OR+')})`);
+        queryParts.push(`animal.species.name:(${speciesTerms.join(' OR ')})`);
       }
     }
 
     if (params.drugName) {
-      const escapedDrug = params.drugName.replace(/"/g, '\\"');
-      queryParts.push(`(drug.brand_name:"${escapedDrug}"+OR+drug.active_ingredients.name:"${escapedDrug}")`);
-    }
-
-    if (params.activeIngredient) {
-      const escaped = params.activeIngredient.replace(/"/g, '\\"');
-      queryParts.push(`drug.active_ingredients.name:"${escaped}"`);
+      // Escape special characters - spaces in terms should be replaced with +
+      // Use spaces around OR operator (not +OR+) to let axios handle URL encoding correctly
+      const escapedDrug = params.drugName.replace(/[+:()]/g, ' ').trim().replace(/\s+/g, '+');
+      // If we have a separate active ingredient (generic name), use it for ingredient search
+      // Otherwise, search with the drug name in both fields
+      if (params.activeIngredient) {
+        const escapedIngredient = params.activeIngredient.replace(/[+:()]/g, ' ').trim().replace(/\s+/g, '+');
+        queryParts.push(`(drug.brand_name:${escapedDrug} OR drug.active_ingredients.name:${escapedIngredient})`);
+      } else {
+        queryParts.push(`(drug.brand_name:${escapedDrug} OR drug.active_ingredients.name:${escapedDrug})`);
+      }
+    } else if (params.activeIngredient) {
+      const escaped = params.activeIngredient.replace(/[+:()]/g, ' ').trim().replace(/\s+/g, '+');
+      queryParts.push(`drug.active_ingredients.name:${escaped}`);
     }
 
     if (params.manufacturer) {
@@ -285,7 +326,7 @@ export class AdverseEventsService {
 
     if (params.outcome && params.outcome.length > 0) {
       const outcomeTerms = params.outcome.map((o) => this.reverseMapOutcome(o));
-      queryParts.push(`outcome.medical_status:(${outcomeTerms.join('+OR+')})`);
+      queryParts.push(`outcome.medical_status:(${outcomeTerms.join(' OR ')})`);
     }
 
     if (params.route) {
@@ -295,10 +336,10 @@ export class AdverseEventsService {
     if (params.dateFrom || params.dateTo) {
       const from = params.dateFrom || '19000101';
       const to = params.dateTo || formatDateForOpenFda(new Date());
-      queryParts.push(`original_receive_date:[${from}+TO+${to}]`);
+      queryParts.push(`original_receive_date:[${from} TO ${to}]`);
     }
 
-    return queryParts.join('+AND+');
+    return queryParts.join(' AND ');
   }
 
   /**

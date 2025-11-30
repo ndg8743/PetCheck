@@ -6,6 +6,17 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import api from '../lib/api';
+
+// Map display species to API species categories
+const speciesToApiMap: Record<string, string> = {
+  dog: 'canine',
+  cat: 'feline',
+  bird: 'avian',
+  rabbit: 'exotic',
+  horse: 'equine',
+  other: 'other',
+};
 
 const speciesOptions = [
   { value: 'dog', label: 'Dog', icon: '🐕' },
@@ -74,34 +85,39 @@ export const PetCreatePage: React.FC = () => {
     setError(null);
 
     try {
-      // Create new pet object
-      const newPet = {
-        id: Date.now().toString(),
+      // Calculate age from birthdate
+      let approximateAge;
+      if (formData.birthDate) {
+        const birth = new Date(formData.birthDate);
+        const today = new Date();
+        const years = today.getFullYear() - birth.getFullYear();
+        approximateAge = { value: years, unit: 'year' as const };
+      }
+
+      // Create pet via API
+      const petData = {
         name: formData.name,
-        species: formData.species.charAt(0).toUpperCase() + formData.species.slice(1),
-        breed: formData.breed,
-        age: formData.birthDate ? Math.floor((Date.now() - new Date(formData.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0,
-        weight: parseFloat(formData.weight) || 0,
-        imageUrl: photoPreview || undefined,
-        medicationCount: 0,
-        conditionCount: 0,
-        allergyCount: 0,
-        birthDate: formData.birthDate,
-        sex: formData.sex,
-        color: formData.color,
-        microchipId: formData.microchipId,
-        notes: formData.notes,
+        species: speciesToApiMap[formData.species] || 'other',
+        breed: formData.breed || undefined,
+        dateOfBirth: formData.birthDate || undefined,
+        approximateAge,
+        weight: formData.weight ? {
+          value: parseFloat(formData.weight),
+          unit: 'lb' as const,
+        } : undefined,
+        gender: formData.sex === 'male' ? 'male' : formData.sex === 'female' ? 'female' : 'unknown',
+        microchipId: formData.microchipId || undefined,
+        profileImageUrl: photoPreview || undefined,
+        notes: formData.notes || undefined,
       };
 
-      // Save to localStorage
-      const existingPets = JSON.parse(localStorage.getItem('petcheck_pets') || '[]');
-      existingPets.push(newPet);
-      localStorage.setItem('petcheck_pets', JSON.stringify(existingPets));
+      await api.post('/pets', petData);
 
       // Navigate to the pet list
       navigate('/pets');
-    } catch (err) {
-      setError('Failed to create pet profile. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to create pet:', err);
+      setError(err.response?.data?.message || 'Failed to create pet profile. Please try again.');
       setLoading(false);
     }
   };

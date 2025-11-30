@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
+import api from '../lib/api';
 
 interface Pet {
   id: string;
@@ -79,34 +80,42 @@ export const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load pets from localStorage
-      const savedPets = localStorage.getItem('petcheck_pets');
-      if (savedPets) {
-        const petData = JSON.parse(savedPets);
-        // Transform to dashboard format with empty medications/conditions
-        const dashboardPets = petData.map((pet: any) => ({
-          id: pet.id,
-          name: pet.name,
-          species: pet.species,
-          breed: pet.breed,
-          age: pet.age || 0,
-          weight: pet.weight || 0,
-          imageUrl: pet.imageUrl,
-          medications: pet.medications || [],
-          conditions: pet.conditions || [],
-          allergies: pet.allergies || [],
-        }));
-        setPets(dashboardPets);
-      } else {
-        setPets([]);
-      }
+      // Load pets from API
+      const response = await api.get('/pets');
+      const petsData = response.data.data || [];
+
+      // Transform to dashboard format
+      const dashboardPets = petsData.map((pet: any) => ({
+        id: pet.id,
+        name: pet.name,
+        species: pet.species,
+        breed: pet.breed || 'Unknown',
+        age: pet.approximateAge?.value || 0,
+        weight: pet.weight?.value || 0,
+        imageUrl: pet.profileImageUrl,
+        medications: (pet.currentMedications || []).map((med: any) => ({
+          id: med.id,
+          drugName: med.drugName,
+          dosage: `${med.dosage?.amount || ''} ${med.dosage?.unit || ''}`,
+          frequency: med.frequency,
+          startDate: med.startDate || '',
+        })),
+        conditions: (pet.medicalConditions || []).map((c: any) => c.name),
+        allergies: (pet.allergies || []).map((a: any) => a.allergen),
+      }));
+      setPets(dashboardPets);
 
       // No fake alerts - start empty
       setAlerts([]);
 
       setLoading(false);
-    } catch (err) {
-      setError('Failed to load dashboard data. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to load dashboard:', err);
+      // Don't show error for 401 (not authenticated)
+      if (err.response?.status !== 401) {
+        setError('Failed to load dashboard data. Please try again.');
+      }
+      setPets([]);
       setLoading(false);
     }
   };

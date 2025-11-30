@@ -15,6 +15,7 @@ declare global {
     interface Request {
       user?: AuthTokenPayload;
       userId?: string;
+      token?: string;
     }
   }
 }
@@ -44,6 +45,7 @@ export async function authenticate(
     const payload = await googleAuthService.verifyToken(token);
     req.user = payload;
     req.userId = payload.userId;
+    req.token = token;
 
     next();
   } catch (error) {
@@ -83,6 +85,7 @@ export async function optionalAuth(
       const payload = await googleAuthService.verifyToken(token);
       req.user = payload;
       req.userId = payload.userId;
+      req.token = token;
     }
 
     next();

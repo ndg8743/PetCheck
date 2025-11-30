@@ -95,40 +95,9 @@ router.get(
 );
 
 /**
- * GET /drugs/:id
- * Get drug by ID
- */
-router.get(
-  '/:id',
-  optionalAuth,
-  [
-    param('id').isString().trim().notEmpty().withMessage('Drug ID is required'),
-  ],
-  asyncHandler(async (req: Request, res: Response) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid drug ID', 400, {
-        errors: errors.array(),
-      });
-    }
-
-    const drug = await greenBookService.getDrugById(req.params.id);
-
-    if (!drug) {
-      throw new AppError(
-        ERROR_CODES.DRUG_NOT_FOUND,
-        `Drug with ID ${req.params.id} not found`,
-        404
-      );
-    }
-
-    res.json(createApiResponse(drug));
-  })
-);
-
-/**
  * GET /drugs/name/:name
  * Get drug by name (trade or generic)
+ * NOTE: This route must be defined BEFORE /:id to prevent "name" from matching as an ID
  */
 router.get(
   '/name/:name',
@@ -168,6 +137,38 @@ router.get(
           suggestion: normalizationResult.matchedDrug?.tradeName,
           confidence: normalizationResult.confidence,
         }
+      );
+    }
+
+    res.json(createApiResponse(drug));
+  })
+);
+
+/**
+ * GET /drugs/:id
+ * Get drug by ID
+ */
+router.get(
+  '/:id',
+  optionalAuth,
+  [
+    param('id').isString().trim().notEmpty().withMessage('Drug ID is required'),
+  ],
+  asyncHandler(async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid drug ID', 400, {
+        errors: errors.array(),
+      });
+    }
+
+    const drug = await greenBookService.getDrugById(req.params.id);
+
+    if (!drug) {
+      throw new AppError(
+        ERROR_CODES.DRUG_NOT_FOUND,
+        `Drug with ID ${req.params.id} not found`,
+        404
       );
     }
 

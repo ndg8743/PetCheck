@@ -7,6 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { ConfirmDialog } from '../components/ui/Modal';
+import api from '../lib/api';
 
 interface Pet {
   id: string;
@@ -43,20 +44,31 @@ export const PetListPage: React.FC = () => {
   const fetchPets = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call to fetch user's pets
-      // const response = await api.get('/pets');
-      // setPets(response.data);
-
-      // For now, load from localStorage or start empty
-      const savedPets = localStorage.getItem('petcheck_pets');
-      if (savedPets) {
-        setPets(JSON.parse(savedPets));
-      } else {
-        setPets([]);
-      }
+      const response = await api.get('/pets');
+      const petsData = response.data.data || [];
+      // Map API response to our Pet interface
+      const mappedPets = petsData.map((pet: any) => ({
+        id: pet.id,
+        name: pet.name,
+        species: pet.species,
+        breed: pet.breed || 'Unknown',
+        age: pet.approximateAge?.value || 0,
+        weight: pet.weight?.value || 0,
+        imageUrl: pet.profileImageUrl,
+        medicationCount: pet.currentMedications?.length || 0,
+        conditionCount: pet.medicalConditions?.length || 0,
+        allergyCount: pet.allergies?.length || 0,
+        lastCheckup: pet.veterinarian?.lastVisit,
+      }));
+      setPets(mappedPets);
       setLoading(false);
-    } catch (err) {
-      setError('Failed to load pets. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to load pets:', err);
+      // Fallback to empty if not authenticated or error
+      if (err.response?.status !== 401) {
+        setError('Failed to load pets. Please try again.');
+      }
+      setPets([]);
       setLoading(false);
     }
   };
@@ -79,9 +91,9 @@ export const PetListPage: React.FC = () => {
 
   const handleDeletePet = async () => {
     try {
+      await api.delete(`/pets/${deleteConfirm.petId}`);
       const updatedPets = pets.filter(p => p.id !== deleteConfirm.petId);
       setPets(updatedPets);
-      localStorage.setItem('petcheck_pets', JSON.stringify(updatedPets));
       setDeleteConfirm({ open: false, petId: '', petName: '' });
     } catch (err) {
       alert('Failed to delete pet. Please try again.');

@@ -9,6 +9,7 @@ import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { Alert } from '../components/ui/Alert';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { ConfirmDialog } from '../components/ui/Modal';
+import api from '../lib/api';
 
 interface Pet {
   id: string;
@@ -80,66 +81,75 @@ export const PetDetailPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load pets from localStorage
-      const savedPets = localStorage.getItem('petcheck_pets');
-      if (savedPets) {
-        const pets = JSON.parse(savedPets);
-        const foundPet = pets.find((p: any) => p.id === id);
+      // Load pet from API
+      const response = await api.get(`/pets/${id}`);
+      const petData = response.data.data;
 
-        if (foundPet) {
-          // Calculate age from birthDate if available
-          let age = foundPet.age || 0;
-          if (foundPet.birthDate) {
-            const birthDate = new Date(foundPet.birthDate);
-            const today = new Date();
-            age = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-          }
-
-          setPet({
-            id: foundPet.id,
-            name: foundPet.name,
-            species: foundPet.species || 'Dog',
-            breed: foundPet.breed || 'Unknown',
-            age: age,
-            weight: foundPet.weight || 0,
-            birthDate: foundPet.birthDate || '',
-            imageUrl: foundPet.photo,
-          });
-
-          // Load medications for this pet from localStorage
-          const savedMeds = localStorage.getItem(`petcheck_medications_${id}`);
-          if (savedMeds) {
-            setMedications(JSON.parse(savedMeds));
-          } else {
-            setMedications([]);
-          }
-
-          // Load conditions for this pet from localStorage
-          const savedConditions = localStorage.getItem(`petcheck_conditions_${id}`);
-          if (savedConditions) {
-            setConditions(JSON.parse(savedConditions));
-          } else {
-            setConditions([]);
-          }
-
-          // Load allergies for this pet from localStorage
-          const savedAllergies = localStorage.getItem(`petcheck_allergies_${id}`);
-          if (savedAllergies) {
-            setAllergies(JSON.parse(savedAllergies));
-          } else {
-            setAllergies([]);
-          }
-
-          setLoading(false);
-          return;
+      if (petData) {
+        // Calculate age from dateOfBirth or approximateAge
+        let age = 0;
+        if (petData.dateOfBirth) {
+          const birthDate = new Date(petData.dateOfBirth);
+          const today = new Date();
+          age = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+        } else if (petData.approximateAge) {
+          age = petData.approximateAge.value;
         }
+
+        setPet({
+          id: petData.id,
+          name: petData.name,
+          species: petData.species || 'Dog',
+          breed: petData.breed || 'Unknown',
+          age: age,
+          weight: petData.weight?.value || 0,
+          birthDate: petData.dateOfBirth || '',
+          imageUrl: petData.profileImageUrl,
+        });
+
+        // Map medications from API
+        const mappedMeds = (petData.currentMedications || []).map((med: any) => ({
+          id: med.id,
+          drugName: med.drugName,
+          dosage: `${med.dosage?.amount || ''} ${med.dosage?.unit || ''}`.trim(),
+          frequency: med.frequency,
+          route: med.route || 'oral',
+          startDate: med.startDate || '',
+          endDate: med.endDate,
+          prescribedBy: med.prescribedBy || '',
+          notes: med.notes,
+        }));
+        setMedications(mappedMeds);
+
+        // Map conditions from API
+        const mappedConditions = (petData.medicalConditions || []).map((cond: any) => ({
+          id: cond.id,
+          name: cond.name,
+          diagnosedDate: cond.diagnosedDate || '',
+          severity: cond.severity || 'mild',
+          notes: cond.notes,
+        }));
+        setConditions(mappedConditions);
+
+        // Map allergies from API
+        const mappedAllergies = (petData.allergies || []).map((allergy: any) => ({
+          id: allergy.id,
+          allergen: allergy.allergen,
+          reaction: allergy.reaction || '',
+          severity: allergy.severity || 'mild',
+        }));
+        setAllergies(mappedAllergies);
+
+        setLoading(false);
+        return;
       }
 
       // Pet not found
       setError('Pet not found');
       setLoading(false);
-    } catch (err) {
-      setError('Failed to load pet details. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to load pet details:', err);
+      setError(err.response?.data?.message || 'Failed to load pet details. Please try again.');
       setLoading(false);
     }
   };
@@ -147,28 +157,38 @@ export const PetDetailPage: React.FC = () => {
   const handleSaveMedication = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      let updatedMedications: Medication[];
+      // Parse dosage into amount and unit
+      const dosageParts = medicationForm.dosage.trim().split(/\s+/);
+      const dosageAmount = parseFloat(dosageParts[0]) || 0;
+      const dosageUnit = dosageParts.slice(1).join(' ') || 'mg';
+
+      const medicationData = {
+        drugName: medicationForm.drugName,
+        dosage: {
+          amount: dosageAmount,
+          unit: dosageUnit,
+        },
+        frequency: medicationForm.frequency || 'once_daily',
+        route: medicationForm.route,
+        startDate: medicationForm.startDate || undefined,
+        prescribedBy: medicationForm.prescribedBy || undefined,
+        notes: medicationForm.notes || undefined,
+      };
+
       if (editingMedication) {
-        // Update existing medication
-        updatedMedications = medications.map(m =>
-          m.id === editingMedication.id
-            ? { ...editingMedication, ...medicationForm }
-            : m
-        );
+        // Update existing medication via API
+        await api.patch(`/pets/${id}/medications/${editingMedication.id}`, medicationData);
       } else {
-        // Add new medication
-        const newMedication: Medication = {
-          id: `m${Date.now()}`,
-          ...medicationForm,
-        };
-        updatedMedications = [...medications, newMedication];
+        // Add new medication via API
+        await api.post(`/pets/${id}/medications`, medicationData);
       }
-      setMedications(updatedMedications);
-      // Save to localStorage
-      localStorage.setItem(`petcheck_medications_${id}`, JSON.stringify(updatedMedications));
+
+      // Refresh pet details to get updated data
+      await fetchPetDetails();
       resetMedicationForm();
-    } catch (err) {
-      alert('Failed to save medication. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to save medication:', err);
+      alert(err.response?.data?.message || 'Failed to save medication. Please try again.');
     }
   };
 
@@ -200,12 +220,17 @@ export const PetDetailPage: React.FC = () => {
     setShowMedicationForm(true);
   };
 
-  const handleDeleteMedication = (medicationId: string) => {
-    const updatedMedications = medications.filter(m => m.id !== medicationId);
-    setMedications(updatedMedications);
-    // Save to localStorage
-    localStorage.setItem(`petcheck_medications_${id}`, JSON.stringify(updatedMedications));
-    setDeletingMedicationId(null);
+  const handleDeleteMedication = async (medicationId: string) => {
+    try {
+      await api.delete(`/pets/${id}/medications/${medicationId}`);
+      // Update local state
+      const updatedMedications = medications.filter(m => m.id !== medicationId);
+      setMedications(updatedMedications);
+      setDeletingMedicationId(null);
+    } catch (err: any) {
+      console.error('Failed to delete medication:', err);
+      alert(err.response?.data?.message || 'Failed to delete medication. Please try again.');
+    }
   };
 
   const getSafetyScore = (): number => {

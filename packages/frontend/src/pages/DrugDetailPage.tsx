@@ -44,7 +44,7 @@ interface SpeciesBreakdown {
 }
 
 export const DrugDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { drugId } = useParams<{ drugId: string }>();
   const navigate = useNavigate();
   const [drug, setDrug] = useState<DrugDetail | null>(null);
   const [adverseEvents, setAdverseEvents] = useState<AdverseEvent[]>([]);
@@ -56,7 +56,7 @@ export const DrugDetailPage: React.FC = () => {
 
   useEffect(() => {
     fetchDrugDetails();
-  }, [id]);
+  }, [drugId]);
 
   const fetchDrugDetails = async () => {
     try {
@@ -69,14 +69,14 @@ export const DrugDetailPage: React.FC = () => {
       let drugData = null;
 
       // First try to get by ID
-      const drugResponse = await fetch(`${apiUrl}/drugs/${encodeURIComponent(id || '')}`);
+      const drugResponse = await fetch(`${apiUrl}/drugs/${encodeURIComponent(drugId || '')}`);
       const drugResult = await drugResponse.json();
 
       if (drugResult.success && drugResult.data) {
         drugData = drugResult.data;
       } else {
         // If not found by ID, try by name (in case ID is actually the drug name)
-        const nameResponse = await fetch(`${apiUrl}/drugs/name/${encodeURIComponent(id || '')}`);
+        const nameResponse = await fetch(`${apiUrl}/drugs/name/${encodeURIComponent(drugId || '')}`);
         const nameResult = await nameResponse.json();
         if (nameResult.success && nameResult.data) {
           drugData = nameResult.data;
@@ -89,11 +89,16 @@ export const DrugDetailPage: React.FC = () => {
         return;
       }
 
-      // Get the drug name for adverse events lookup
-      const drugName = drugData.tradeName || drugData.genericName || id;
+      // Get the drug name and generic name for adverse events lookup
+      const drugName = drugData.tradeName || drugData.genericName || drugId;
+      const genericName = drugData.genericName || drugData.activeIngredients?.[0]?.name;
 
-      // Fetch adverse events summary
-      const aeResponse = await fetch(`${apiUrl}/adverse-events/summary/${encodeURIComponent(drugName)}`);
+      // Fetch adverse events summary - pass genericName for better active ingredient search
+      const aeUrl = new URL(`${apiUrl}/adverse-events/summary/${encodeURIComponent(drugName)}`);
+      if (genericName && genericName !== drugName) {
+        aeUrl.searchParams.set('genericName', genericName);
+      }
+      const aeResponse = await fetch(aeUrl.toString());
       const aeResult = await aeResponse.json();
       const aeSummary = aeResult.success ? aeResult.data : null;
 
@@ -104,7 +109,7 @@ export const DrugDetailPage: React.FC = () => {
       const deathReports = drugData.deathReports || aeSummary?.deathReports || 0;
 
       setDrug({
-        id: drugData.id || id || '',
+        id: drugData.id || drugId || '',
         name: drugData.tradeName || drugData.genericName || 'Unknown',
         genericName: drugData.genericName || drugData.activeIngredients?.[0]?.name || '',
         manufacturer: drugData.manufacturer || 'Unknown',

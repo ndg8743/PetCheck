@@ -1,9 +1,11 @@
 /**
  * Pet Profile Service
+ * Uses PostgreSQL for persistence
  */
 
 import { createLogger } from '../logger';
-import { redis, getFromCache, setInCache, deleteFromCache } from '../redis';
+import { getFromCache, setInCache, deleteFromCache } from '../redis';
+import { petRepository } from '../database';
 import { interactionEngine } from '../interactions';
 import { recallsService, adverseEventsService } from '../openfda';
 import {
@@ -21,10 +23,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../../config';
 
 const logger = createLogger('pet-service');
-
-// In-memory pet store (in production, use a database)
-const petStore: Map<string, Pet> = new Map();
-const petsByUser: Map<string, string[]> = new Map();
 
 export class PetService {
   /**
@@ -50,39 +48,23 @@ export class PetService {
       isActive: true,
     };
 
-    await this.savePet(pet);
-
-    // Update user's pet list
-    const userPets = petsByUser.get(userId) || [];
-    userPets.push(pet.id);
-    petsByUser.set(userId, userPets);
-
-    logger.info(`Pet created: ${pet.id} for user ${userId}`);
-    return pet;
+    const createdPet = await petRepository.create(pet);
+    logger.info(`Pet created: ${createdPet.id} for user ${userId}`);
+    return createdPet;
   }
 
   /**
    * Get a pet by ID
    */
   async getPetById(petId: string): Promise<Pet | null> {
-    return petStore.get(petId) || null;
+    return petRepository.findById(petId);
   }
 
   /**
    * Get all pets for a user
    */
   async getPetsByUserId(userId: string): Promise<Pet[]> {
-    const petIds = petsByUser.get(userId) || [];
-    const pets: Pet[] = [];
-
-    for (const petId of petIds) {
-      const pet = petStore.get(petId);
-      if (pet && pet.isActive) {
-        pets.push(pet);
-      }
-    }
-
-    return pets;
+    return petRepository.findByUserId(userId);
   }
 
   /**
@@ -114,11 +96,11 @@ export class PetService {
 
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    const updatedPet = await petRepository.update(pet);
     await this.invalidatePetCache(petId);
 
     logger.info(`Pet updated: ${petId}`);
-    return pet;
+    return updatedPet;
   }
 
   /**
@@ -135,10 +117,7 @@ export class PetService {
       throw new Error('Unauthorized to delete this pet');
     }
 
-    pet.isActive = false;
-    pet.updatedAt = new Date();
-
-    await this.savePet(pet);
+    await petRepository.softDelete(petId);
     await this.invalidatePetCache(petId);
 
     logger.info(`Pet deleted: ${petId}`);
@@ -173,7 +152,7 @@ export class PetService {
     pet.currentMedications.push(newMedication);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
 
     logger.info(`Medication added to pet ${petId}: ${medication.drugName}`);
@@ -207,7 +186,7 @@ export class PetService {
     Object.assign(medication, updates, { updatedAt: new Date() });
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
 
     return medication;
@@ -235,7 +214,7 @@ export class PetService {
     pet.currentMedications.splice(index, 1);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
   }
 
@@ -266,7 +245,7 @@ export class PetService {
     pet.medicalConditions.push(newCondition);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
 
     return newCondition;
@@ -294,7 +273,7 @@ export class PetService {
     pet.medicalConditions.splice(index, 1);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
   }
 
@@ -325,7 +304,7 @@ export class PetService {
     pet.allergies.push(newAllergy);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
 
     return newAllergy;
@@ -353,7 +332,7 @@ export class PetService {
     pet.allergies.splice(index, 1);
     pet.updatedAt = new Date();
 
-    await this.savePet(pet);
+    await petRepository.update(pet);
     await this.invalidatePetCache(petId);
   }
 
@@ -453,21 +432,6 @@ export class PetService {
     await setInCache(cacheKey, summary, { ttl: 1800, staleTtl: 3600 });
 
     return summary;
-  }
-
-  /**
-   * Save pet to store
-   */
-  private async savePet(pet: Pet): Promise<void> {
-    petStore.set(pet.id, pet);
-
-    // Also persist to Redis
-    await redis.set(
-      `pet:${pet.id}`,
-      JSON.stringify(pet),
-      'EX',
-      604800 // 7 days
-    );
   }
 
   /**

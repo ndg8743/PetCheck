@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  petcheck-postgres:
+    image: postgres:16-alpine
+    container_name: petcheck-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=petcheck
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-petcheck_prod}
+      - POSTGRES_DB=petcheck
+    volumes:
+      - petcheck-postgres-data:/var/lib/postgresql/data
+    networks:
+      - petcheck-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U petcheck -d petcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   petcheck-redis:
     image: redis:alpine
     container_name: petcheck-redis
@@ -26,8 +44,15 @@ services:
       - PORT=3001
       - REDIS_HOST=petcheck-redis
       - REDIS_PORT=6379
+      - DATABASE_HOST=petcheck-postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=petcheck
+      - DATABASE_USER=petcheck
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-petcheck_prod}
     depends_on:
       petcheck-redis:
+        condition: service_healthy
+      petcheck-postgres:
         condition: service_healthy
     networks:
       - traefik-public
@@ -76,3 +101,4 @@ networks:
 
 volumes:
   petcheck-redis-data:
+  petcheck-postgres-data:

@@ -149,7 +149,7 @@ export class VetLookupService {
         throw new Error(`Google Places API error: ${response.data.status}`);
       }
 
-      const clinics: VetClinic[] = response.data.results.map((place) => ({
+      let clinics: VetClinic[] = response.data.results.map((place) => ({
         placeId: place.place_id,
         name: place.name,
         address: place.formatted_address,
@@ -174,6 +174,30 @@ export class VetLookupService {
 
       // Sort by distance
       clinics.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+      // Fetch details (phone, website) for top 10 results in parallel
+      const topClinics = clinics.slice(0, 10);
+      const enrichedClinics = await Promise.all(
+        topClinics.map(async (clinic) => {
+          try {
+            const details = await this.getClinicDetailsInternal(clinic.placeId);
+            if (details) {
+              return {
+                ...clinic,
+                phone: details.phone,
+                website: details.website,
+                openingHours: details.openingHours || clinic.openingHours,
+              };
+            }
+          } catch (error) {
+            logger.debug(`Failed to fetch details for ${clinic.placeId}`);
+          }
+          return clinic;
+        })
+      );
+
+      // Replace top clinics with enriched versions
+      clinics = [...enrichedClinics, ...clinics.slice(10)];
 
       const result: VetSearchResult = {
         clinics,
@@ -200,6 +224,38 @@ export class VetLookupService {
       logger.error('Vet search error:', error);
       // Return mock data as fallback
       return this.getMockResults(params);
+    }
+  }
+
+  /**
+   * Internal method to fetch clinic details (used during search enrichment)
+   */
+  private async getClinicDetailsInternal(placeId: string): Promise<Partial<VetClinic> | null> {
+    try {
+      const response = await axios.get<GooglePlaceDetailsResponse>(
+        `${GOOGLE_PLACES_BASE_URL}/details/json`,
+        {
+          params: {
+            place_id: placeId,
+            fields: 'formatted_phone_number,website,opening_hours',
+            key: config.google.placesApiKey,
+          },
+          timeout: 5000,
+        }
+      );
+
+      if (response.data.status !== 'OK') {
+        return null;
+      }
+
+      const place = response.data.result;
+      return {
+        phone: place.formatted_phone_number,
+        website: place.website,
+        openingHours: place.opening_hours?.weekday_text,
+      };
+    } catch (error) {
+      return null;
     }
   }
 

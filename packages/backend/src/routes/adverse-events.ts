@@ -196,6 +196,7 @@ router.get(
 /**
  * GET /adverse-events/summary/:drugName
  * Get comprehensive summary for a specific drug
+ * @query genericName - Optional generic name (active ingredient) for better search results
  */
 router.get(
   '/summary/:drugName',
@@ -203,6 +204,7 @@ router.get(
   searchRateLimiter,
   [
     param('drugName').isString().trim().notEmpty().withMessage('Drug name is required'),
+    query('genericName').optional().isString().trim(),
   ],
   asyncHandler(async (req: Request, res: Response) => {
     const errors = validationResult(req);
@@ -213,9 +215,10 @@ router.get(
     }
 
     const drugName = decodeURIComponent(req.params.drugName);
+    const genericName = req.query.genericName as string | undefined;
 
-    logger.info(`Getting adverse events summary for: ${drugName}`);
-    const summary = await adverseEventsService.getDrugSummary(drugName);
+    logger.info(`Getting adverse events summary for: ${drugName}${genericName ? ` (generic: ${genericName})` : ''}`);
+    const summary = await adverseEventsService.getDrugSummary(drugName, genericName);
 
     if (summary.totalReports === 0) {
       logger.info(`No adverse events found for drug: ${drugName}`);
@@ -223,6 +226,7 @@ router.get(
 
     res.json(createApiResponse(summary, {
       drugName,
+      genericName,
       totalReports: summary.totalReports,
     }));
   })

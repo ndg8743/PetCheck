@@ -2,4 +2,10 @@
  * Authentication Services
  */
 
-export { googleAuthService, GoogleAuthService, GoogleUserInfo } from './google-auth';
+export {
+  googleAuthService,
+  GoogleAuthService,
+  GoogleUserInfo,
+  DeviceInfo,
+  SessionInfo,
+} from './google-auth';

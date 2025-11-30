@@ -1,11 +1,14 @@
 /**
  * Google OAuth Authentication Service
+ * With PostgreSQL persistence and multi-device session support
  */
 
-import { OAuth2Client, TokenPayload } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { createLogger } from '../logger';
 import { redis } from '../redis';
+import { userRepository, sessionRepository, Session } from '../database';
 import { config } from '../../config';
 import {
   User,
@@ -18,13 +21,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 const logger = createLogger('google-auth');
 
-// In-memory user store (in production, use a database)
-const userStore: Map<string, User> = new Map();
-// Index for O(1) Google ID lookups instead of O(n)
-const googleIdIndex: Map<string, string> = new Map(); // googleId -> userId
-
 // Initialize Google OAuth client
 const oAuth2Client = new OAuth2Client(config.google.clientId);
+
+// Maximum sessions per user (prevents unlimited device accumulation)
+const MAX_SESSIONS_PER_USER = 10;
 
 export interface GoogleUserInfo {
   googleId: string;
@@ -32,6 +33,23 @@ export interface GoogleUserInfo {
   name: string;
   avatarUrl?: string;
   emailVerified: boolean;
+}
+
+export interface DeviceInfo {
+  deviceName?: string;
+  deviceType?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface SessionInfo {
+  id: string;
+  deviceName?: string;
+  deviceType?: string;
+  ipAddress?: string;
+  createdAt: Date;
+  lastActiveAt: Date;
+  current: boolean;
 }
 
 export class GoogleAuthService {
@@ -69,12 +87,13 @@ export class GoogleAuthService {
 
   /**
    * Sign in or register a user with Google
+   * Supports multi-device login
    */
-  async signInWithGoogle(idToken: string): Promise<LoginResponse> {
+  async signInWithGoogle(idToken: string, deviceInfo?: DeviceInfo): Promise<LoginResponse> {
     const googleUser = await this.verifyGoogleToken(idToken);
 
-    // Find or create user
-    let user = await this.findUserByGoogleId(googleUser.googleId);
+    // Find or create user in PostgreSQL
+    let user = await userRepository.findByGoogleId(googleUser.googleId);
 
     if (!user) {
       user = await this.createUser(googleUser);
@@ -82,7 +101,7 @@ export class GoogleAuthService {
     } else {
       // Update last login
       user.lastLoginAt = new Date();
-      await this.saveUser(user);
+      user = await userRepository.update(user);
       logger.info(`User logged in: ${user.email}`);
     }
 
@@ -90,8 +109,11 @@ export class GoogleAuthService {
     const token = this.generateToken(user);
     const expiresAt = this.getTokenExpiration();
 
-    // Store session in Redis
-    await this.storeSession(user.id, token);
+    // Create session for this device
+    await this.createSession(user.id, token, expiresAt, deviceInfo);
+
+    // Cache user in Redis for fast lookups
+    await this.cacheUser(user);
 
     return {
       user,
@@ -101,25 +123,23 @@ export class GoogleAuthService {
   }
 
   /**
-   * Verify JWT token
+   * Verify JWT token and validate session
    */
   async verifyToken(token: string): Promise<AuthTokenPayload> {
     try {
       const payload = jwt.verify(token, config.jwt.secret) as AuthTokenPayload;
+      const tokenHash = this.hashToken(token);
 
-      // Check if session is valid in Redis (skip if Redis unavailable)
-      try {
-        const sessionKey = `session:${payload.userId}`;
-        const storedToken = await redis.get(sessionKey);
-
-        if (storedToken && storedToken !== token) {
-          throw new Error('Session invalid or expired');
-        }
-        // If storedToken is null (Redis down or session not stored), allow through
-      } catch (redisError) {
-        // Redis unavailable - validate JWT only
-        logger.warn('Redis unavailable for session validation - using JWT only');
+      // Check session exists in PostgreSQL
+      const session = await sessionRepository.findByTokenHash(tokenHash);
+      if (!session) {
+        throw new Error('Session not found or expired');
       }
+
+      // Update last active time (async, don't wait)
+      sessionRepository.updateLastActive(session.id).catch((err) => {
+        logger.warn('Failed to update session last active:', err);
+      });
 
       return payload;
     } catch (error) {
@@ -134,19 +154,77 @@ export class GoogleAuthService {
   }
 
   /**
-   * Get user by ID
+   * Get user by ID (with Redis cache)
    */
   async getUserById(userId: string): Promise<User | null> {
-    return userStore.get(userId) || null;
+    // Try Redis cache first
+    try {
+      const cached = await redis.get(`user:${userId}`);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      logger.debug('Redis cache miss for user');
+    }
+
+    // Fallback to PostgreSQL
+    const user = await userRepository.findById(userId);
+    if (user) {
+      await this.cacheUser(user);
+    }
+    return user;
   }
 
   /**
-   * Find user by Google ID - O(1) using index
+   * Get all active sessions for a user
    */
-  private async findUserByGoogleId(googleId: string): Promise<User | null> {
-    const userId = googleIdIndex.get(googleId);
-    if (!userId) return null;
-    return userStore.get(userId) || null;
+  async getUserSessions(userId: string, currentToken?: string): Promise<SessionInfo[]> {
+    const sessions = await sessionRepository.findByUserId(userId);
+    const currentTokenHash = currentToken ? this.hashToken(currentToken) : null;
+
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      deviceType: session.deviceType,
+      ipAddress: session.ipAddress,
+      createdAt: session.createdAt,
+      lastActiveAt: session.lastActiveAt,
+      current: session.tokenHash === currentTokenHash,
+    }));
+  }
+
+  /**
+   * Revoke a specific session
+   */
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    const sessions = await sessionRepository.findByUserId(userId);
+    const session = sessions.find((s) => s.id === sessionId);
+
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    await sessionRepository.delete(sessionId);
+    logger.info(`Session ${sessionId} revoked for user ${userId}`);
+  }
+
+  /**
+   * Revoke all sessions except current
+   */
+  async revokeAllOtherSessions(userId: string, currentToken: string): Promise<number> {
+    const sessions = await sessionRepository.findByUserId(userId);
+    const currentTokenHash = this.hashToken(currentToken);
+
+    let revokedCount = 0;
+    for (const session of sessions) {
+      if (session.tokenHash !== currentTokenHash) {
+        await sessionRepository.delete(session.id);
+        revokedCount++;
+      }
+    }
+
+    logger.info(`Revoked ${revokedCount} sessions for user ${userId}`);
+    return revokedCount;
   }
 
   /**
@@ -158,7 +236,7 @@ export class GoogleAuthService {
       email: googleUser.email,
       name: googleUser.name,
       avatarUrl: googleUser.avatarUrl,
-      role: 'pet_owner', // Default role
+      role: 'pet_owner',
       googleId: googleUser.googleId,
       createdAt: new Date(),
       lastLoginAt: new Date(),
@@ -166,33 +244,44 @@ export class GoogleAuthService {
       isActive: true,
     };
 
-    await this.saveUser(user);
-    return user;
+    return await userRepository.create(user);
   }
 
   /**
-   * Save user to store
+   * Create a session for a device
    */
-  private async saveUser(user: User): Promise<void> {
-    userStore.set(user.id, user);
-
-    // Maintain Google ID index for O(1) lookups
-    if (user.googleId) {
-      googleIdIndex.set(user.googleId, user.id);
+  private async createSession(
+    userId: string,
+    token: string,
+    expiresAt: Date,
+    deviceInfo?: DeviceInfo
+  ): Promise<Session> {
+    // Enforce max sessions limit
+    const sessionCount = await sessionRepository.countByUserId(userId);
+    if (sessionCount >= MAX_SESSIONS_PER_USER) {
+      // Remove oldest sessions
+      const sessions = await sessionRepository.findByUserId(userId);
+      const sessionsToRemove = sessions.slice(MAX_SESSIONS_PER_USER - 1);
+      for (const session of sessionsToRemove) {
+        await sessionRepository.delete(session.id);
+      }
+      logger.info(`Removed ${sessionsToRemove.length} old sessions for user ${userId}`);
     }
 
-    // Also persist to Redis for durability (in production, use database)
-    try {
-      await redis.set(
-        `user:${user.id}`,
-        JSON.stringify(user),
-        'EX',
-        config.cache.userSession
-      );
-    } catch (error) {
-      // Redis unavailable - user is still stored in memory
-      logger.warn('Failed to persist user to Redis - using in-memory store only');
-    }
+    const session: Session = {
+      id: uuidv4(),
+      userId,
+      tokenHash: this.hashToken(token),
+      deviceName: deviceInfo?.deviceName || this.parseDeviceName(deviceInfo?.userAgent),
+      deviceType: deviceInfo?.deviceType || this.parseDeviceType(deviceInfo?.userAgent),
+      ipAddress: deviceInfo?.ipAddress,
+      userAgent: deviceInfo?.userAgent,
+      createdAt: new Date(),
+      lastActiveAt: new Date(),
+      expiresAt,
+    };
+
+    return await sessionRepository.create(session);
   }
 
   /**
@@ -204,16 +293,17 @@ export class GoogleAuthService {
       throw new Error('Unauthorized to change user roles');
     }
 
-    const user = await this.getUserById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new Error('User not found');
     }
 
     user.role = role;
-    await this.saveUser(user);
+    const updatedUser = await userRepository.update(user);
+    await this.cacheUser(updatedUser);
 
     logger.info(`User ${userId} role updated to ${role} by admin ${adminUserId}`);
-    return user;
+    return updatedUser;
   }
 
   /**
@@ -223,7 +313,7 @@ export class GoogleAuthService {
     userId: string,
     preferences: Partial<User['preferences']>
   ): Promise<User> {
-    const user = await this.getUserById(userId);
+    const user = await userRepository.findById(userId);
     if (!user) {
       throw new Error('User not found');
     }
@@ -233,22 +323,32 @@ export class GoogleAuthService {
       ...preferences,
     };
 
-    await this.saveUser(user);
-    return user;
+    const updatedUser = await userRepository.update(user);
+    await this.cacheUser(updatedUser);
+    return updatedUser;
   }
 
   /**
-   * Sign out user
+   * Sign out - revoke current session
    */
-  async signOut(userId: string): Promise<void> {
-    try {
-      const sessionKey = `session:${userId}`;
-      await redis.del(sessionKey);
-    } catch (error) {
-      // Redis unavailable - session deletion skipped
-      logger.warn('Failed to delete session from Redis');
+  async signOut(userId: string, token: string): Promise<void> {
+    const tokenHash = this.hashToken(token);
+    const session = await sessionRepository.findByTokenHash(tokenHash);
+
+    if (session) {
+      await sessionRepository.delete(session.id);
     }
+
     logger.info(`User ${userId} signed out`);
+  }
+
+  /**
+   * Sign out from all devices
+   */
+  async signOutAllDevices(userId: string): Promise<void> {
+    await sessionRepository.deleteByUserId(userId);
+    await redis.del(`user:${userId}`);
+    logger.info(`User ${userId} signed out from all devices`);
   }
 
   /**
@@ -288,16 +388,57 @@ export class GoogleAuthService {
   }
 
   /**
-   * Store session in Redis (gracefully handles Redis unavailability)
+   * Hash token for storage (don't store raw tokens)
    */
-  private async storeSession(userId: string, token: string): Promise<void> {
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Cache user in Redis
+   */
+  private async cacheUser(user: User): Promise<void> {
     try {
-      const sessionKey = `session:${userId}`;
-      await redis.set(sessionKey, token, 'EX', config.cache.userSession);
+      await redis.set(
+        `user:${user.id}`,
+        JSON.stringify(user),
+        'EX',
+        config.cache.userSession
+      );
     } catch (error) {
-      // Redis unavailable - session won't be stored but auth still works
-      logger.warn('Failed to store session in Redis - continuing without session storage');
+      logger.warn('Failed to cache user in Redis');
     }
+  }
+
+  /**
+   * Parse device name from user agent
+   */
+  private parseDeviceName(userAgent?: string): string {
+    if (!userAgent) return 'Unknown Device';
+
+    if (userAgent.includes('iPhone')) return 'iPhone';
+    if (userAgent.includes('iPad')) return 'iPad';
+    if (userAgent.includes('Android')) return 'Android Device';
+    if (userAgent.includes('Windows')) return 'Windows PC';
+    if (userAgent.includes('Mac')) return 'Mac';
+    if (userAgent.includes('Linux')) return 'Linux PC';
+
+    return 'Unknown Device';
+  }
+
+  /**
+   * Parse device type from user agent
+   */
+  private parseDeviceType(userAgent?: string): string {
+    if (!userAgent) return 'unknown';
+
+    if (userAgent.includes('Mobile') || userAgent.includes('iPhone') || userAgent.includes('Android')) {
+      return 'mobile';
+    }
+    if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
+      return 'tablet';
+    }
+    return 'desktop';
   }
 
   /**
@@ -310,37 +451,49 @@ export class GoogleAuthService {
   /**
    * Sign in as guest user (for demo/testing)
    */
-  async signInAsGuest(): Promise<LoginResponse> {
-    // Create or find the guest user
-    const guestId = 'guest-user-001';
-    let user = userStore.get(guestId);
+  async signInAsGuest(deviceInfo?: DeviceInfo): Promise<LoginResponse> {
+    const guestGoogleId = 'guest-user-google-id';
+
+    let user = await userRepository.findByGoogleId(guestGoogleId);
 
     if (!user) {
       user = {
-        id: guestId,
+        id: uuidv4(),
         email: 'guest@petcheck.demo',
         name: 'Guest User',
         avatarUrl: undefined,
         role: 'pet_owner',
-        googleId: 'guest',
+        googleId: guestGoogleId,
         createdAt: new Date(),
         lastLoginAt: new Date(),
         preferences: { ...DEFAULT_USER_PREFERENCES },
         isActive: true,
       };
-      await this.saveUser(user);
+      user = await userRepository.create(user);
       logger.info('Guest user created');
     } else {
       user.lastLoginAt = new Date();
-      await this.saveUser(user);
+      user = await userRepository.update(user);
     }
 
     const token = this.generateToken(user);
     const expiresAt = this.getTokenExpiration();
-    await this.storeSession(user.id, token);
+    await this.createSession(user.id, token, expiresAt, deviceInfo);
+    await this.cacheUser(user);
 
     logger.info('Guest user logged in');
     return { user, token, expiresAt };
+  }
+
+  /**
+   * Cleanup expired sessions (run periodically)
+   */
+  async cleanupExpiredSessions(): Promise<number> {
+    const deleted = await sessionRepository.deleteExpired();
+    if (deleted > 0) {
+      logger.info(`Cleaned up ${deleted} expired sessions`);
+    }
+    return deleted;
   }
 }
 
