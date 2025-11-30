@@ -293,7 +293,7 @@ export class AdverseEventsService {
         .map((s) => getSpeciesByName(s))
         .flatMap((s) => s?.openFdaTerms || []);
       if (speciesTerms.length > 0) {
-        queryParts.push(`animal.species.name:(${speciesTerms.join(' OR ')})`);
+        queryParts.push(`animal.species:(${speciesTerms.join(' OR ')})`);
       }
     }
 
