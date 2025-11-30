@@ -101,6 +101,7 @@ function App() {
         <Route path="/recalls" element={<WithAppShell><RecallsPage /></WithAppShell>} />
         <Route path="/interactions" element={<WithAppShell><InteractionCheckerPage /></WithAppShell>} />
         <Route path="/vets" element={<WithAppShell><VetFinderPage /></WithAppShell>} />
+        <Route path="/vet-finder" element={<Navigate to="/vets" replace />} />
 
         {/* Protected routes with AppShell */}
         <Route
