@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
@@ -98,5 +98,48 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
-  }
-});
+  },
+  // Production build settings for security
+  build: {
+    // Don't generate source maps in production (prevents code inspection)
+    sourcemap: mode === 'development',
+    // Minify for production
+    minify: mode === 'production' ? 'terser' : false,
+    terserOptions: mode === 'production' ? {
+      compress: {
+        // Remove console logs in production
+        drop_console: true,
+        drop_debugger: true,
+        // Aggressive dead code elimination
+        dead_code: true,
+        // Remove unused variables
+        unused: true,
+      },
+      mangle: {
+        // Mangle property names for obfuscation
+        properties: {
+          regex: /^_/,
+        },
+      },
+      format: {
+        // Remove comments
+        comments: false,
+      },
+    } : undefined,
+    // Chunk splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['axios'],
+        },
+        // Hash filenames for cache busting
+        chunkFileNames: mode === 'production' ? 'assets/[hash].js' : 'assets/[name]-[hash].js',
+        entryFileNames: mode === 'production' ? 'assets/[hash].js' : 'assets/[name]-[hash].js',
+        assetFileNames: mode === 'production' ? 'assets/[hash].[ext]' : 'assets/[name]-[hash].[ext]',
+      },
+    },
+  },
+  // Environment variable prefix for security
+  envPrefix: 'VITE_',
+}));

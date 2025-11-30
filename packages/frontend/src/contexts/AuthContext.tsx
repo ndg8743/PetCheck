@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@petcheck/shared';
 import api from '../lib/api';
+import { secureStorage } from '../lib/secureStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -29,12 +30,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from secure storage
   useEffect(() => {
     const initAuth = () => {
       try {
-        const storedToken = localStorage.getItem('authToken');
-        const storedUser = localStorage.getItem('user');
+        // Try secure storage first, fallback to old localStorage for migration
+        let storedToken = secureStorage.getItem('authToken');
+        let storedUser = secureStorage.getItem('user');
+
+        // Migration: check old localStorage and migrate
+        if (!storedToken && localStorage.getItem('authToken')) {
+          storedToken = localStorage.getItem('authToken');
+          if (storedToken) {
+            secureStorage.setItem('authToken', storedToken);
+            localStorage.removeItem('authToken');
+          }
+        }
+        if (!storedUser && localStorage.getItem('user')) {
+          storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            secureStorage.setItem('user', storedUser);
+            localStorage.removeItem('user');
+          }
+        }
 
         if (storedToken && storedUser) {
           setToken(storedToken);
@@ -42,8 +60,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
+        secureStorage.removeItem('authToken');
+        secureStorage.removeItem('user');
       } finally {
         setIsLoading(false);
       }
@@ -57,8 +75,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.post('/auth/login', { email, password });
       const { token: newToken, user: newUser } = response.data;
 
-      localStorage.setItem('authToken', newToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      secureStorage.setItem('authToken', newToken);
+      secureStorage.setItem('user', JSON.stringify(newUser));
 
       setToken(newToken);
       setUser(newUser);
@@ -79,8 +97,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.post('/auth/google', { credential });
       const { token: newToken, user: newUser, isNew } = response.data.data;
 
-      localStorage.setItem('authToken', newToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      secureStorage.setItem('authToken', newToken);
+      secureStorage.setItem('user', JSON.stringify(newUser));
 
       setToken(newToken);
       setUser(newUser);
@@ -101,8 +119,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.post('/auth/guest');
       const { token: newToken, user: newUser } = response.data.data;
 
-      localStorage.setItem('authToken', newToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      secureStorage.setItem('authToken', newToken);
+      secureStorage.setItem('user', JSON.stringify(newUser));
 
       setToken(newToken);
       setUser(newUser);
@@ -123,8 +141,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.post('/auth/signup', { name, email, password, role });
       const { token: newToken, user: newUser } = response.data;
 
-      localStorage.setItem('authToken', newToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      secureStorage.setItem('authToken', newToken);
+      secureStorage.setItem('user', JSON.stringify(newUser));
 
       setToken(newToken);
       setUser(newUser);
@@ -138,15 +156,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
+    secureStorage.removeItem('authToken');
+    secureStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };
 
   const updateUser = (updatedUser: User) => {
     setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    secureStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
   const clearNewUserFlag = () => {
