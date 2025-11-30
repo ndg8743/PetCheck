@@ -123,6 +123,8 @@ export interface AdverseEventAggregation {
 export interface AdverseEventSummary {
   drugName: string;
   totalReports: number;
+  seriousReports: number;
+  deathReports: number;
   speciesBreakdown: { species: string; count: number }[];
   outcomeBreakdown: { outcome: OutcomeSeriousness; count: number }[];
   topReactions: { reaction: string; count: number }[];
