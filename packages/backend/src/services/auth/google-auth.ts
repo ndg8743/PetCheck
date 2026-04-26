@@ -16,6 +16,7 @@ import {
   LoginResponse,
   AuthTokenPayload,
   DEFAULT_USER_PREFERENCES,
+  GUEST_GOOGLE_ID,
 } from '@petcheck/shared';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -128,6 +129,12 @@ export class GoogleAuthService {
   async verifyToken(token: string): Promise<AuthTokenPayload> {
     try {
       const payload = jwt.verify(token, config.jwt.secret) as AuthTokenPayload;
+
+      // Guest tokens don't have a persisted session — JWT signature is the only check.
+      if (payload.isGuest) {
+        return payload;
+      }
+
       const tokenHash = this.hashToken(token);
 
       // Check session exists in PostgreSQL
@@ -359,6 +366,7 @@ export class GoogleAuthService {
       userId: user.id,
       email: user.email,
       role: user.role,
+      ...(user.isGuest || user.googleId === GUEST_GOOGLE_ID ? { isGuest: true } : {}),
     };
 
     return jwt.sign(payload, config.jwt.secret, {
@@ -452,9 +460,7 @@ export class GoogleAuthService {
    * Sign in as guest user (for demo/testing)
    */
   async signInAsGuest(deviceInfo?: DeviceInfo): Promise<LoginResponse> {
-    const guestGoogleId = 'guest-user-google-id';
-
-    let user = await userRepository.findByGoogleId(guestGoogleId);
+    let user = await userRepository.findByGoogleId(GUEST_GOOGLE_ID);
 
     if (!user) {
       user = {
@@ -463,25 +469,24 @@ export class GoogleAuthService {
         name: 'Guest User',
         avatarUrl: undefined,
         role: 'pet_owner',
-        googleId: guestGoogleId,
+        googleId: GUEST_GOOGLE_ID,
         createdAt: new Date(),
         lastLoginAt: new Date(),
         preferences: { ...DEFAULT_USER_PREFERENCES },
         isActive: true,
+        isGuest: true,
       };
       user = await userRepository.create(user);
       logger.info('Guest user created');
     } else {
-      user.lastLoginAt = new Date();
-      user = await userRepository.update(user);
+      user.isGuest = true;
     }
 
     const token = this.generateToken(user);
     const expiresAt = this.getTokenExpiration();
-    await this.createSession(user.id, token, expiresAt, deviceInfo);
-    await this.cacheUser(user);
+    // Skip session persistence and lastLoginAt updates for guests — no real-data writes.
 
-    logger.info('Guest user logged in');
+    logger.info('Guest user logged in (no session persisted)');
     return { user, token, expiresAt };
   }
 

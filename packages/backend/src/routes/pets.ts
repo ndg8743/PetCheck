@@ -6,7 +6,8 @@
 import { Router, Request, Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { petService } from '../services/pets';
-import { authenticate } from '../middleware/auth';
+import { getGuestPets, getGuestPetById, getGuestPetSafetySummary } from '../services/guest/mock-pets';
+import { authenticate, requireNonGuest } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/error-handler';
 import { createLogger } from '../services/logger';
 import {
@@ -31,7 +32,9 @@ router.get(
   '/',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
-    const pets = await petService.getPetsByUserId(req.userId!);
+    const pets = req.user?.isGuest
+      ? getGuestPets()
+      : await petService.getPetsByUserId(req.userId!);
 
     res.json(createApiResponse(pets, {
       total: pets.length,
@@ -46,6 +49,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  requireNonGuest,
   [
     body('name').isString().trim().notEmpty().withMessage('Pet name is required'),
     body('species')
@@ -118,6 +122,15 @@ router.get(
       });
     }
 
+    if (req.user?.isGuest) {
+      const guestPet = getGuestPetById(req.params.id);
+      if (!guestPet) {
+        throw new AppError(ERROR_CODES.PET_NOT_FOUND, 'Pet not found', 404);
+      }
+      res.json(createApiResponse(guestPet));
+      return;
+    }
+
     const pet = await petService.getPetById(req.params.id);
 
     if (!pet) {
@@ -143,6 +156,7 @@ router.get(
 router.patch(
   '/:id',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     body('name').optional().isString().trim(),
@@ -197,6 +211,7 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
   ],
@@ -222,6 +237,7 @@ router.delete(
 router.post(
   '/:id/medications',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     body('drugName').isString().trim().notEmpty().withMessage('Drug name is required'),
@@ -299,6 +315,7 @@ router.post(
 router.patch(
   '/:id/medications/:medId',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     param('medId').isString().trim().notEmpty().withMessage('Medication ID is required'),
@@ -341,6 +358,7 @@ router.patch(
 router.delete(
   '/:id/medications/:medId',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     param('medId').isString().trim().notEmpty().withMessage('Medication ID is required'),
@@ -367,6 +385,7 @@ router.delete(
 router.post(
   '/:id/conditions',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     body('name').isString().trim().notEmpty().withMessage('Condition name is required'),
@@ -412,6 +431,7 @@ router.post(
 router.delete(
   '/:id/conditions/:condId',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     param('condId').isString().trim().notEmpty().withMessage('Condition ID is required'),
@@ -438,6 +458,7 @@ router.delete(
 router.post(
   '/:id/allergies',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     body('allergen').isString().trim().notEmpty().withMessage('Allergen is required'),
@@ -488,6 +509,7 @@ router.post(
 router.delete(
   '/:id/allergies/:allergyId',
   authenticate,
+  requireNonGuest,
   [
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     param('allergyId').isString().trim().notEmpty().withMessage('Allergy ID is required'),
@@ -523,6 +545,15 @@ router.get(
       throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid pet ID', 400, {
         errors: errors.array(),
       });
+    }
+
+    if (req.user?.isGuest) {
+      const summary = getGuestPetSafetySummary(req.params.id);
+      if (!summary) {
+        throw new AppError(ERROR_CODES.PET_NOT_FOUND, 'Pet not found', 404);
+      }
+      res.json(createApiResponse(summary));
+      return;
     }
 
     const pet = await petService.getPetById(req.params.id);

@@ -15,7 +15,10 @@ export interface User {
   lastLoginAt: Date;
   preferences: UserPreferences;
   isActive: boolean;
+  isGuest?: boolean;
 }
+
+export const GUEST_GOOGLE_ID = 'guest-user-google-id';
 
 export interface UserPreferences {
   defaultSpecies?: string;
@@ -36,6 +39,7 @@ export interface AuthTokenPayload {
   userId: string;
   email: string;
   role: UserRole;
+  isGuest?: boolean;
   iat: number;
   exp: number;
 }

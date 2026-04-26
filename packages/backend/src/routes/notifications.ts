@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireNonGuest } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/error-handler';
 import { createLogger } from '../services/logger';
 import { pushService } from '../services/notifications';
@@ -44,6 +44,7 @@ router.get(
 router.post(
   '/subscribe',
   authenticate,
+  requireNonGuest,
   [
     body('endpoint').isURL().withMessage('Valid endpoint URL required'),
     body('keys.p256dh').isString().notEmpty().withMessage('p256dh key required'),
@@ -103,6 +104,7 @@ router.post(
 router.post(
   '/unsubscribe',
   authenticate,
+  requireNonGuest,
   [
     body('deviceId').optional().isUUID().withMessage('Invalid device ID'),
   ],

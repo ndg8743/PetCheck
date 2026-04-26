@@ -129,6 +129,30 @@ export function requireRole(...roles: UserRole[]) {
 }
 
 /**
+ * Block guest users from write operations.
+ * Guests can browse demo data but cannot persist anything.
+ */
+export function requireNonGuest(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (req.user?.isGuest) {
+    res.status(403).json(
+      createErrorResponse(
+        createApiError(
+          ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+          'Sign in with Google to save changes — guest mode is read-only.',
+          403
+        )
+      )
+    );
+    return;
+  }
+  next();
+}
+
+/**
  * Require veterinarian or researcher role
  */
 export const requireResearchAccess = requireRole('veterinarian', 'researcher', 'admin');

@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { googleAuthService, DeviceInfo } from '../services/auth';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireNonGuest } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rate-limit';
 import { asyncHandler, AppError } from '../middleware/error-handler';
 import { createLogger } from '../services/logger';
@@ -96,6 +96,7 @@ router.post(
 router.patch(
   '/preferences',
   authenticate,
+  requireNonGuest,
   [
     body('theme').optional().isIn(['light', 'dark', 'system']),
     body('measurementSystem').optional().isIn(['metric', 'imperial']),
