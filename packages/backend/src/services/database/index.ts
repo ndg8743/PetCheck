@@ -1,6 +1,7 @@
 /**
  * PostgreSQL Database Service
  * Handles user persistence and multi-device sessions
+ * Falls back to in-memory storage when DATABASE_URL is empty
  */
 
 import { Pool, PoolClient } from 'pg';
@@ -13,33 +14,88 @@ import {
   Pet,
   SpeciesCategory,
 } from '@petcheck/shared';
+import { v4 as uuidv4 } from 'uuid';
 
 const logger = createLogger('database');
 
+// Track if we're using in-memory fallback
+let useInMemoryDb = false;
+let dbInitWarningLogged = false;
+
+// In-memory storage
+const inMemoryUsers = new Map<string, any>();
+const inMemorySessions = new Map<string, any>();
+const inMemoryPets = new Map<string, any>();
+
 // Create connection pool
-const pool = new Pool({
-  host: config.database.host,
-  port: config.database.port,
-  database: config.database.name,
-  user: config.database.user,
-  password: config.database.password,
-  max: config.database.poolSize,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+let pool: Pool | null = null;
 
-pool.on('error', (err) => {
-  logger.error('Unexpected database pool error:', err);
-});
+// Initialize database connection
+async function initializeConnection(): Promise<void> {
+  // Check if DATABASE_URL is provided
+  const databaseUrl = process.env.DATABASE_URL;
+  const hasEnvVars = config.database.host && config.database.user;
 
-pool.on('connect', () => {
-  logger.debug('New database connection established');
-});
+  if (!databaseUrl && !hasEnvVars) {
+    if (!dbInitWarningLogged) {
+      logger.warn('DATABASE_URL not set - using in-memory database (data will not persist across restarts)');
+      dbInitWarningLogged = true;
+    }
+    useInMemoryDb = true;
+    return;
+  }
+
+  try {
+    pool = new Pool({
+      host: config.database.host,
+      port: config.database.port,
+      database: config.database.name,
+      user: config.database.user,
+      password: config.database.password,
+      max: config.database.poolSize,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+
+    pool.on('error', (err) => {
+      logger.error('Unexpected database pool error:', err);
+    });
+
+    pool.on('connect', () => {
+      logger.debug('New database connection established');
+    });
+
+    // Test connection
+    const client = await pool.connect();
+    client.release();
+    logger.info('Database connection pool initialized');
+  } catch (error) {
+    if (!dbInitWarningLogged) {
+      logger.warn('Failed to connect to PostgreSQL - using in-memory database:', error);
+      dbInitWarningLogged = true;
+    }
+    useInMemoryDb = true;
+    pool = null;
+  }
+}
 
 /**
  * Initialize database schema
  */
 export async function initializeDatabase(): Promise<void> {
+  await initializeConnection();
+
+  if (useInMemoryDb) {
+    logger.info('Database: using in-memory storage');
+    return;
+  }
+
+  if (!pool) {
+    logger.warn('Database pool not available, using in-memory storage');
+    useInMemoryDb = true;
+    return;
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -118,7 +174,8 @@ export async function initializeDatabase(): Promise<void> {
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error('Failed to initialize database schema:', error);
-    throw error;
+    // Don't throw - allow server to continue with in-memory db
+    useInMemoryDb = true;
   } finally {
     client.release();
   }
@@ -129,78 +186,146 @@ export async function initializeDatabase(): Promise<void> {
  */
 export const userRepository = {
   async findById(id: string): Promise<User | null> {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    if (useInMemoryDb) {
+      return inMemoryUsers.get(id) || null;
+    }
+
+    if (!pool) return null;
+    try {
+      const result = await pool.query(
+        'SELECT * FROM users WHERE id = $1',
+        [id]
+      );
+      return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return null;
+    }
   },
 
   async findByGoogleId(googleId: string): Promise<User | null> {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE google_id = $1',
-      [googleId]
-    );
-    return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    if (useInMemoryDb) {
+      for (const user of inMemoryUsers.values()) {
+        if (user.googleId === googleId) return user;
+      }
+      return null;
+    }
+
+    if (!pool) return null;
+    try {
+      const result = await pool.query(
+        'SELECT * FROM users WHERE google_id = $1',
+        [googleId]
+      );
+      return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return null;
+    }
   },
 
   async findByEmail(email: string): Promise<User | null> {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
-    return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    if (useInMemoryDb) {
+      for (const user of inMemoryUsers.values()) {
+        if (user.email === email) return user;
+      }
+      return null;
+    }
+
+    if (!pool) return null;
+    try {
+      const result = await pool.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+      return result.rows[0] ? mapRowToUser(result.rows[0]) : null;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return null;
+    }
   },
 
   async create(user: User): Promise<User> {
-    const result = await pool.query(
-      `INSERT INTO users (id, email, name, avatar_url, role, google_id, preferences, is_active, created_at, last_login_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [
-        user.id,
-        user.email,
-        user.name,
-        user.avatarUrl,
-        user.role,
-        user.googleId,
-        JSON.stringify(user.preferences),
-        user.isActive,
-        user.createdAt,
-        user.lastLoginAt,
-      ]
-    );
-    return mapRowToUser(result.rows[0]);
+    if (useInMemoryDb) {
+      inMemoryUsers.set(user.id, user);
+      return user;
+    }
+
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `INSERT INTO users (id, email, name, avatar_url, role, google_id, preferences, is_active, created_at, last_login_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          user.id,
+          user.email,
+          user.name,
+          user.avatarUrl,
+          user.role,
+          user.googleId,
+          JSON.stringify(user.preferences),
+          user.isActive,
+          user.createdAt,
+          user.lastLoginAt,
+        ]
+      );
+      return mapRowToUser(result.rows[0]);
+    } catch (err) {
+      logger.error('Database error:', err);
+      throw err;
+    }
   },
 
   async update(user: User): Promise<User> {
-    const result = await pool.query(
-      `UPDATE users SET
-        email = $2,
-        name = $3,
-        avatar_url = $4,
-        role = $5,
-        preferences = $6,
-        is_active = $7,
-        last_login_at = $8
-       WHERE id = $1
-       RETURNING *`,
-      [
-        user.id,
-        user.email,
-        user.name,
-        user.avatarUrl,
-        user.role,
-        JSON.stringify(user.preferences),
-        user.isActive,
-        user.lastLoginAt,
-      ]
-    );
-    return mapRowToUser(result.rows[0]);
+    if (useInMemoryDb) {
+      inMemoryUsers.set(user.id, user);
+      return user;
+    }
+
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `UPDATE users SET
+          email = $2,
+          name = $3,
+          avatar_url = $4,
+          role = $5,
+          preferences = $6,
+          is_active = $7,
+          last_login_at = $8
+         WHERE id = $1
+         RETURNING *`,
+        [
+          user.id,
+          user.email,
+          user.name,
+          user.avatarUrl,
+          user.role,
+          JSON.stringify(user.preferences),
+          user.isActive,
+          user.lastLoginAt,
+        ]
+      );
+      return mapRowToUser(result.rows[0]);
+    } catch (err) {
+      logger.error('Database error:', err);
+      throw err;
+    }
   },
 
   async delete(id: string): Promise<void> {
-    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    if (useInMemoryDb) {
+      inMemoryUsers.delete(id);
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 };
 
@@ -222,70 +347,182 @@ export interface Session {
 
 export const sessionRepository = {
   async create(session: Session): Promise<Session> {
-    const result = await pool.query(
-      `INSERT INTO sessions (id, user_id, token_hash, device_name, device_type, ip_address, user_agent, created_at, last_active_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [
-        session.id,
-        session.userId,
-        session.tokenHash,
-        session.deviceName,
-        session.deviceType,
-        session.ipAddress,
-        session.userAgent,
-        session.createdAt,
-        session.lastActiveAt,
-        session.expiresAt,
-      ]
-    );
-    return mapRowToSession(result.rows[0]);
+    if (useInMemoryDb) {
+      inMemorySessions.set(session.id, session);
+      return session;
+    }
+
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `INSERT INTO sessions (id, user_id, token_hash, device_name, device_type, ip_address, user_agent, created_at, last_active_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          session.id,
+          session.userId,
+          session.tokenHash,
+          session.deviceName,
+          session.deviceType,
+          session.ipAddress,
+          session.userAgent,
+          session.createdAt,
+          session.lastActiveAt,
+          session.expiresAt,
+        ]
+      );
+      return mapRowToSession(result.rows[0]);
+    } catch (err) {
+      logger.error('Database error:', err);
+      throw err;
+    }
   },
 
   async findByTokenHash(tokenHash: string): Promise<Session | null> {
-    const result = await pool.query(
-      'SELECT * FROM sessions WHERE token_hash = $1 AND expires_at > NOW()',
-      [tokenHash]
-    );
-    return result.rows[0] ? mapRowToSession(result.rows[0]) : null;
+    if (useInMemoryDb) {
+      for (const session of inMemorySessions.values()) {
+        if (session.tokenHash === tokenHash && session.expiresAt > new Date()) {
+          return session;
+        }
+      }
+      return null;
+    }
+
+    if (!pool) return null;
+    try {
+      const result = await pool.query(
+        'SELECT * FROM sessions WHERE token_hash = $1 AND expires_at > NOW()',
+        [tokenHash]
+      );
+      return result.rows[0] ? mapRowToSession(result.rows[0]) : null;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return null;
+    }
   },
 
   async findByUserId(userId: string): Promise<Session[]> {
-    const result = await pool.query(
-      'SELECT * FROM sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY last_active_at DESC',
-      [userId]
-    );
-    return result.rows.map(mapRowToSession);
+    if (useInMemoryDb) {
+      const result = [];
+      for (const session of inMemorySessions.values()) {
+        if (session.userId === userId && session.expiresAt > new Date()) {
+          result.push(session);
+        }
+      }
+      return result.sort((a, b) => b.lastActiveAt.getTime() - a.lastActiveAt.getTime());
+    }
+
+    if (!pool) return [];
+    try {
+      const result = await pool.query(
+        'SELECT * FROM sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY last_active_at DESC',
+        [userId]
+      );
+      return result.rows.map(mapRowToSession);
+    } catch (err) {
+      logger.error('Database error:', err);
+      return [];
+    }
   },
 
   async updateLastActive(id: string): Promise<void> {
-    await pool.query(
-      'UPDATE sessions SET last_active_at = NOW() WHERE id = $1',
-      [id]
-    );
+    if (useInMemoryDb) {
+      const session = inMemorySessions.get(id);
+      if (session) {
+        session.lastActiveAt = new Date();
+      }
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query(
+        'UPDATE sessions SET last_active_at = NOW() WHERE id = $1',
+        [id]
+      );
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 
   async delete(id: string): Promise<void> {
-    await pool.query('DELETE FROM sessions WHERE id = $1', [id]);
+    if (useInMemoryDb) {
+      inMemorySessions.delete(id);
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query('DELETE FROM sessions WHERE id = $1', [id]);
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 
   async deleteByUserId(userId: string): Promise<void> {
-    await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+    if (useInMemoryDb) {
+      for (const [id, session] of inMemorySessions.entries()) {
+        if (session.userId === userId) {
+          inMemorySessions.delete(id);
+        }
+      }
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 
   async deleteExpired(): Promise<number> {
-    const result = await pool.query(
-      'DELETE FROM sessions WHERE expires_at < NOW()'
-    );
-    return result.rowCount || 0;
+    if (useInMemoryDb) {
+      let count = 0;
+      for (const [id, session] of inMemorySessions.entries()) {
+        if (session.expiresAt < new Date()) {
+          inMemorySessions.delete(id);
+          count++;
+        }
+      }
+      return count;
+    }
+
+    if (!pool) return 0;
+    try {
+      const result = await pool.query(
+        'DELETE FROM sessions WHERE expires_at < NOW()'
+      );
+      return result.rowCount || 0;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return 0;
+    }
   },
 
   async countByUserId(userId: string): Promise<number> {
-    const result = await pool.query(
-      'SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND expires_at > NOW()',
-      [userId]
-    );
-    return parseInt(result.rows[0].count, 10);
+    if (useInMemoryDb) {
+      let count = 0;
+      for (const session of inMemorySessions.values()) {
+        if (session.userId === userId && session.expiresAt > new Date()) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    if (!pool) return 0;
+    try {
+      const result = await pool.query(
+        'SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND expires_at > NOW()',
+        [userId]
+      );
+      return parseInt(result.rows[0].count, 10);
+    } catch (err) {
+      logger.error('Database error:', err);
+      return 0;
+    }
   },
 };
 
@@ -294,109 +531,181 @@ export const sessionRepository = {
  */
 export const petRepository = {
   async create(pet: Pet): Promise<Pet> {
-    const result = await pool.query(
-      `INSERT INTO pets (
-        id, user_id, name, species, breed, date_of_birth, approximate_age,
-        weight, gender, is_neutered, microchip_id, profile_image_url, notes,
-        veterinarian, medical_conditions, allergies, current_medications,
-        is_active, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-      RETURNING *`,
-      [
-        pet.id,
-        pet.userId,
-        pet.name,
-        pet.species,
-        pet.breed,
-        pet.dateOfBirth,
-        JSON.stringify(pet.approximateAge),
-        JSON.stringify(pet.weight),
-        pet.gender,
-        pet.isNeutered,
-        pet.microchipId,
-        pet.profileImageUrl,
-        pet.notes,
-        JSON.stringify(pet.veterinarian),
-        JSON.stringify(pet.medicalConditions),
-        JSON.stringify(pet.allergies),
-        JSON.stringify(pet.currentMedications),
-        pet.isActive,
-        pet.createdAt,
-        pet.updatedAt,
-      ]
-    );
-    return mapRowToPet(result.rows[0]);
+    if (useInMemoryDb) {
+      inMemoryPets.set(pet.id, pet);
+      return pet;
+    }
+
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `INSERT INTO pets (
+          id, user_id, name, species, breed, date_of_birth, approximate_age,
+          weight, gender, is_neutered, microchip_id, profile_image_url, notes,
+          veterinarian, medical_conditions, allergies, current_medications,
+          is_active, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        RETURNING *`,
+        [
+          pet.id,
+          pet.userId,
+          pet.name,
+          pet.species,
+          pet.breed,
+          pet.dateOfBirth,
+          JSON.stringify(pet.approximateAge),
+          JSON.stringify(pet.weight),
+          pet.gender,
+          pet.isNeutered,
+          pet.microchipId,
+          pet.profileImageUrl,
+          pet.notes,
+          JSON.stringify(pet.veterinarian),
+          JSON.stringify(pet.medicalConditions),
+          JSON.stringify(pet.allergies),
+          JSON.stringify(pet.currentMedications),
+          pet.isActive,
+          pet.createdAt,
+          pet.updatedAt,
+        ]
+      );
+      return mapRowToPet(result.rows[0]);
+    } catch (err) {
+      logger.error('Database error:', err);
+      throw err;
+    }
   },
 
   async findById(id: string): Promise<Pet | null> {
-    const result = await pool.query(
-      'SELECT * FROM pets WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] ? mapRowToPet(result.rows[0]) : null;
+    if (useInMemoryDb) {
+      return inMemoryPets.get(id) || null;
+    }
+
+    if (!pool) return null;
+    try {
+      const result = await pool.query(
+        'SELECT * FROM pets WHERE id = $1',
+        [id]
+      );
+      return result.rows[0] ? mapRowToPet(result.rows[0]) : null;
+    } catch (err) {
+      logger.error('Database error:', err);
+      return null;
+    }
   },
 
   async findByUserId(userId: string): Promise<Pet[]> {
-    const result = await pool.query(
-      'SELECT * FROM pets WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC',
-      [userId]
-    );
-    return result.rows.map(mapRowToPet);
+    if (useInMemoryDb) {
+      const result = [];
+      for (const pet of inMemoryPets.values()) {
+        if (pet.userId === userId && pet.isActive) {
+          result.push(pet);
+        }
+      }
+      return result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
+
+    if (!pool) return [];
+    try {
+      const result = await pool.query(
+        'SELECT * FROM pets WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC',
+        [userId]
+      );
+      return result.rows.map(mapRowToPet);
+    } catch (err) {
+      logger.error('Database error:', err);
+      return [];
+    }
   },
 
   async update(pet: Pet): Promise<Pet> {
-    const result = await pool.query(
-      `UPDATE pets SET
-        name = $2,
-        breed = $3,
-        date_of_birth = $4,
-        approximate_age = $5,
-        weight = $6,
-        gender = $7,
-        is_neutered = $8,
-        microchip_id = $9,
-        profile_image_url = $10,
-        notes = $11,
-        veterinarian = $12,
-        medical_conditions = $13,
-        allergies = $14,
-        current_medications = $15,
-        is_active = $16,
-        updated_at = $17
-      WHERE id = $1
-      RETURNING *`,
-      [
-        pet.id,
-        pet.name,
-        pet.breed,
-        pet.dateOfBirth,
-        JSON.stringify(pet.approximateAge),
-        JSON.stringify(pet.weight),
-        pet.gender,
-        pet.isNeutered,
-        pet.microchipId,
-        pet.profileImageUrl,
-        pet.notes,
-        JSON.stringify(pet.veterinarian),
-        JSON.stringify(pet.medicalConditions),
-        JSON.stringify(pet.allergies),
-        JSON.stringify(pet.currentMedications),
-        pet.isActive,
-        pet.updatedAt,
-      ]
-    );
-    return mapRowToPet(result.rows[0]);
+    if (useInMemoryDb) {
+      inMemoryPets.set(pet.id, pet);
+      return pet;
+    }
+
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `UPDATE pets SET
+          name = $2,
+          breed = $3,
+          date_of_birth = $4,
+          approximate_age = $5,
+          weight = $6,
+          gender = $7,
+          is_neutered = $8,
+          microchip_id = $9,
+          profile_image_url = $10,
+          notes = $11,
+          veterinarian = $12,
+          medical_conditions = $13,
+          allergies = $14,
+          current_medications = $15,
+          is_active = $16,
+          updated_at = $17
+        WHERE id = $1
+        RETURNING *`,
+        [
+          pet.id,
+          pet.name,
+          pet.breed,
+          pet.dateOfBirth,
+          JSON.stringify(pet.approximateAge),
+          JSON.stringify(pet.weight),
+          pet.gender,
+          pet.isNeutered,
+          pet.microchipId,
+          pet.profileImageUrl,
+          pet.notes,
+          JSON.stringify(pet.veterinarian),
+          JSON.stringify(pet.medicalConditions),
+          JSON.stringify(pet.allergies),
+          JSON.stringify(pet.currentMedications),
+          pet.isActive,
+          pet.updatedAt,
+        ]
+      );
+      return mapRowToPet(result.rows[0]);
+    } catch (err) {
+      logger.error('Database error:', err);
+      throw err;
+    }
   },
 
   async delete(id: string): Promise<void> {
-    await pool.query('DELETE FROM pets WHERE id = $1', [id]);
+    if (useInMemoryDb) {
+      inMemoryPets.delete(id);
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query('DELETE FROM pets WHERE id = $1', [id]);
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 
   async softDelete(id: string): Promise<void> {
-    await pool.query(
-      'UPDATE pets SET is_active = false, updated_at = NOW() WHERE id = $1',
-      [id]
-    );
+    if (useInMemoryDb) {
+      const pet = inMemoryPets.get(id);
+      if (pet) {
+        pet.isActive = false;
+        pet.updatedAt = new Date();
+      }
+      return;
+    }
+
+    if (!pool) return;
+    try {
+      await pool.query(
+        'UPDATE pets SET is_active = false, updated_at = NOW() WHERE id = $1',
+        [id]
+      );
+    } catch (err) {
+      logger.error('Database error:', err);
+    }
   },
 };
 
@@ -468,6 +777,11 @@ function mapRowToSession(row: any): Session {
  * Health check
  */
 export async function isDatabaseHealthy(): Promise<boolean> {
+  if (useInMemoryDb) {
+    return true; // In-memory DB is always healthy
+  }
+
+  if (!pool) return false;
   try {
     const result = await pool.query('SELECT 1');
     return result.rows.length > 0;
@@ -480,8 +794,12 @@ export async function isDatabaseHealthy(): Promise<boolean> {
  * Graceful shutdown
  */
 export async function closeDatabase(): Promise<void> {
-  await pool.end();
-  logger.info('Database connection pool closed');
+  if (pool) {
+    await pool.end();
+    logger.info('Database connection pool closed');
+  } else {
+    logger.debug('No database pool to close');
+  }
 }
 
 export { pool };

@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 const logger = createLogger('recalls');
 
 // FDA Enforcement API endpoint (includes animal/veterinary recalls)
-const FDA_ENFORCEMENT_API = 'https://api.fda.gov/food/enforcement.json';
+const FDA_ENFORCEMENT_API = 'https://api.fda.gov/drug/enforcement.json';
 
 interface FdaEnforcementRecord {
   recall_number?: string;
@@ -150,11 +150,11 @@ export class RecallsService {
       // Search for each drug name
       const searchTerms = drugNames
         .map((name) => `product_description:"${name.replace(/"/g, '\\"')}"`)
-        .join('+OR+');
+        .join(' OR ');
 
       const response = await axios.get<FdaEnforcementResponse>(FDA_ENFORCEMENT_API, {
         params: {
-          search: `(${searchTerms})+AND+product_type:"Drugs"`,
+          search: `(${searchTerms}) AND product_type:"Drugs"`,
           limit: 100,
           api_key: config.openFda.apiKey || undefined,
         },
@@ -196,7 +196,7 @@ export class RecallsService {
     try {
       const response = await axios.get<FdaEnforcementResponse>(FDA_ENFORCEMENT_API, {
         params: {
-          search: 'status:"Ongoing"+AND+product_type:"Drugs"',
+          search: 'status:"Ongoing" AND product_type:"Drugs"',
           limit,
           api_key: config.openFda.apiKey || undefined,
         },
@@ -244,12 +244,14 @@ export class RecallsService {
   private buildSearchQuery(params: RecallSearchParams): string {
     const queryParts: string[] = [];
 
-    // Always filter to drugs
-    queryParts.push('product_type:"Drugs"');
+    // Default to veterinary/animal-related recalls so we don't return human-only meds
+    if (!params.query && !params.productName && !params.manufacturer) {
+      queryParts.push('(product_description:"veterinary" OR product_description:"animal" OR product_description:"canine" OR product_description:"feline" OR product_description:"equine" OR product_description:"dog" OR product_description:"cat" OR product_description:"horse")');
+    }
 
     if (params.query) {
       const escaped = params.query.replace(/"/g, '\\"');
-      queryParts.push(`(product_description:"${escaped}"+OR+reason_for_recall:"${escaped}")`);
+      queryParts.push(`(product_description:"${escaped}" OR reason_for_recall:"${escaped}")`);
     }
 
     if (params.productName) {
@@ -263,22 +265,22 @@ export class RecallsService {
     }
 
     if (params.recallClass && params.recallClass.length > 0) {
-      const classes = params.recallClass.map((c) => `"Class ${c}"`).join('+OR+');
+      const classes = params.recallClass.map((c) => `"Class ${c}"`).join(' OR ');
       queryParts.push(`classification:(${classes})`);
     }
 
     if (params.status && params.status.length > 0) {
-      const statuses = params.status.map((s) => `"${this.mapStatusToFda(s)}"`).join('+OR+');
+      const statuses = params.status.map((s) => `"${this.mapStatusToFda(s)}"`).join(' OR ');
       queryParts.push(`status:(${statuses})`);
     }
 
     if (params.dateFrom || params.dateTo) {
       const from = params.dateFrom || '19000101';
       const to = params.dateTo || this.formatDate(new Date());
-      queryParts.push(`recall_initiation_date:[${from}+TO+${to}]`);
+      queryParts.push(`recall_initiation_date:[${from} TO ${to}]`);
     }
 
-    return queryParts.join('+AND+');
+    return queryParts.join(' AND ');
   }
 
   /**

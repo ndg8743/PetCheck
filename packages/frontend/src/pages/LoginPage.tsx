@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleOAuthProvider, GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Alert } from '../components/ui/Alert';
@@ -9,11 +8,26 @@ import { useAuth } from '../contexts/AuthContext';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+// Lazy load GoogleOAuthProvider and GoogleLogin only if CLIENT_ID is available
+const GoogleLoginComponent = React.lazy(() => 
+  import('@react-oauth/google').then(m => ({ 
+    default: m.GoogleLogin 
+  }))
+);
+
+const GoogleOAuthProviderComponent = React.lazy(() => 
+  import('@react-oauth/google').then(m => ({ 
+    default: m.GoogleOAuthProvider 
+  }))
+);
+
 const LoginPageContent: React.FC = () => {
   const navigate = useNavigate();
   const { loginAsGuest, loginWithGoogle } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isGoogleConfigured = useMemo(() => Boolean(GOOGLE_CLIENT_ID), []);
 
   const handleGuestLogin = async () => {
     setIsLoading(true);
@@ -28,7 +42,7 @@ const LoginPageContent: React.FC = () => {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -98,6 +112,23 @@ const LoginPageContent: React.FC = () => {
               </Alert>
             )}
 
+            {/* Google OAuth Unavailable Notice */}
+            {!isGoogleConfigured && (
+              <Alert variant="warning" className="mb-6">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-warning-600 dark:text-warning-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-warning-900 dark:text-warning-100">Google Sign-In Not Available</p>
+                    <p className="text-sm text-warning-800 dark:text-warning-200 mt-1">
+                      Google OAuth is not configured in this build. Use guest login to continue.
+                    </p>
+                  </div>
+                </div>
+              </Alert>
+            )}
+
             {/* Login Buttons */}
             <div className="space-y-4 mb-6">
               {/* Guest Login - Primary */}
@@ -119,27 +150,33 @@ const LoginPageContent: React.FC = () => {
                 {isLoading ? 'Signing in...' : 'Continue as Guest'}
               </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white dark:bg-navy-800 text-gray-500">or</span>
-                </div>
-              </div>
+              {isGoogleConfigured && (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-white dark:bg-navy-800 text-gray-500">or</span>
+                    </div>
+                  </div>
 
-              <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  useOneTap
-                  theme="outline"
-                  size="large"
-                  width="320"
-                  text="signin_with"
-                  shape="rectangular"
-                />
-              </div>
+                  <div className="flex justify-center">
+                    <React.Suspense fallback={<LoadingSpinner size="sm" />}>
+                      <GoogleLoginComponent
+                        onSuccess={handleGoogleSuccess}
+                        onError={handleGoogleError}
+                        useOneTap
+                        theme="outline"
+                        size="large"
+                        width="320"
+                        text="signin_with"
+                        shape="rectangular"
+                      />
+                    </React.Suspense>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Features */}
@@ -185,9 +222,19 @@ const LoginPageContent: React.FC = () => {
   );
 };
 
-// Wrap with GoogleOAuthProvider only on this page
-export const LoginPage: React.FC = () => (
-  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-    <LoginPageContent />
-  </GoogleOAuthProvider>
-);
+export const LoginPage: React.FC = () => {
+  const isGoogleConfigured = Boolean(GOOGLE_CLIENT_ID);
+
+  // Only wrap with GoogleOAuthProvider if CLIENT_ID is available
+  if (isGoogleConfigured) {
+    return (
+      <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>}>
+        <GoogleOAuthProviderComponent clientId={GOOGLE_CLIENT_ID}>
+          <LoginPageContent />
+        </GoogleOAuthProviderComponent>
+      </React.Suspense>
+    );
+  }
+
+  return <LoginPageContent />;
+};

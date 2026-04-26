@@ -71,26 +71,26 @@ async function startServer(): Promise<void> {
   // Initialize services
   logger.info('Initializing services...');
 
-  // Check Redis connection
+  // Check Redis connection (non-blocking failure)
   const redisHealthy = await isRedisHealthy();
   if (!redisHealthy) {
-    logger.warn('Redis is not available - caching will be disabled');
+    logger.warn('Redis is not available - using in-memory cache');
   } else {
     logger.info('Redis connected successfully');
   }
 
-  // Initialize PostgreSQL database
+  // Initialize PostgreSQL database (non-blocking failure)
   try {
     await initializeDatabase();
     const dbHealthy = await isDatabaseHealthy();
     if (dbHealthy) {
       logger.info('PostgreSQL database initialized and connected');
     } else {
-      logger.error('PostgreSQL database health check failed');
+      logger.warn('PostgreSQL database health check failed - using in-memory storage');
     }
   } catch (error) {
-    logger.error('Failed to initialize PostgreSQL database:', error);
-    process.exit(1);
+    logger.warn('Database initialization encountered an error - using in-memory storage:', error);
+    // Don't exit - continue with in-memory fallback
   }
 
   // Start periodic session cleanup (every hour)
@@ -105,12 +105,13 @@ async function startServer(): Promise<void> {
     }
   }, 60 * 60 * 1000);
 
-  // Initialize Green Book drug database
+  // Initialize Green Book drug database (non-blocking failure)
   try {
     await greenBookService.initialize();
     logger.info('Green Book service initialized');
   } catch (error) {
-    logger.error('Failed to initialize Green Book service:', error);
+    logger.warn('Failed to initialize Green Book service:', error);
+    // Don't exit - continue with sample data as fallback
   }
 
   // Start server

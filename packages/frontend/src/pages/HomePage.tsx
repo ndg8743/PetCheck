@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -6,8 +6,38 @@ import { Badge } from '../components/ui/Badge';
 import { SearchBar } from '../components/common/SearchBar';
 import { Disclaimer, TrustIndicator } from '../components/common/Disclaimer';
 
+interface Recall {
+  id: string;
+  productDescription?: string;
+  recallingFirm?: string;
+  recallInitiationDate?: string;
+  classification?: string;
+}
+
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const [recentRecalls, setRecentRecalls] = useState<Recall[]>([]);
+  const [recallsLoading, setRecallsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchRecentRecalls = async () => {
+      try {
+        setRecallsLoading(true);
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/recalls?limit=3`);
+        const data = await response.json();
+        if (data.success && data.data?.recalls) {
+          setRecentRecalls(data.data.recalls.slice(0, 3));
+        }
+      } catch (err) {
+        console.error('Failed to fetch recent recalls:', err);
+        // Silently fail - the section will be empty
+      } finally {
+        setRecallsLoading(false);
+      }
+    };
+
+    fetchRecentRecalls();
+  }, []);
 
   const handleSearch = (query: string) => {
     navigate(`/drugs/search?q=${encodeURIComponent(query)}`);
@@ -77,30 +107,6 @@ export const HomePage: React.FC = () => {
     },
   ];
 
-  const recentRecalls = [
-    {
-      id: 1,
-      productName: 'ProHeart 6',
-      manufacturer: 'Zoetis',
-      date: '2024-11-15',
-      severity: 'moderate',
-    },
-    {
-      id: 2,
-      productName: "Hill's Prescription Diet",
-      manufacturer: "Hill's Pet Nutrition",
-      date: '2024-11-10',
-      severity: 'high',
-    },
-    {
-      id: 3,
-      productName: 'Purina Pro Plan Veterinary Diets',
-      manufacturer: 'Nestlé Purina',
-      date: '2024-11-05',
-      severity: 'low',
-    },
-  ];
-
   const getColorClasses = (color: string) => {
     switch (color) {
       case 'primary':
@@ -114,6 +120,13 @@ export const HomePage: React.FC = () => {
       default:
         return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
     }
+  };
+
+  const getRecallSeverity = (classification?: string): 'high' | 'moderate' | 'low' => {
+    if (!classification) return 'low';
+    if (classification === 'Class I') return 'high';
+    if (classification === 'Class II') return 'moderate';
+    return 'low';
   };
 
   return (
@@ -181,47 +194,56 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* Recent Recalls Alert Section */}
-      <section className="py-12 bg-accent-50 dark:bg-accent-900/10 border-y border-accent-200 dark:border-accent-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-accent-100 dark:bg-accent-900/30">
-                <svg className="w-6 h-6 text-accent-600 dark:text-accent-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-navy-900 dark:text-white font-display">Recent Recalls</h2>
-            </div>
-            <Button variant="outline" onClick={() => navigate('/recalls')}>
-              View All Recalls
-            </Button>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            {recentRecalls.map((recall, index) => (
-              <Card
-                key={recall.id}
-                variant={recall.severity === 'high' ? 'danger' : recall.severity === 'moderate' ? 'warning' : 'default'}
-                hover
-                onClick={() => navigate('/recalls')}
-                className="animate-fade-up"
-                style={{ animationDelay: `${index * 100}ms` } as React.CSSProperties}
-              >
-                <div className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <Badge variant={recall.severity === 'high' ? 'danger' : recall.severity === 'moderate' ? 'warning' : 'secondary'}>
-                      {recall.severity.toUpperCase()}
-                    </Badge>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{recall.date}</span>
-                  </div>
-                  <h3 className="font-semibold text-navy-900 dark:text-white mb-1 font-display">{recall.productName}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{recall.manufacturer}</p>
+      {!recallsLoading && recentRecalls.length > 0 && (
+        <section className="py-12 bg-accent-50 dark:bg-accent-900/10 border-y border-accent-200 dark:border-accent-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-accent-100 dark:bg-accent-900/30">
+                  <svg className="w-6 h-6 text-accent-600 dark:text-accent-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
                 </div>
-              </Card>
-            ))}
+                <h2 className="text-2xl font-bold text-navy-900 dark:text-white font-display">Recent Recalls</h2>
+              </div>
+              <Button variant="outline" onClick={() => navigate('/recalls')}>
+                View All Recalls
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              {recentRecalls.map((recall, index) => {
+                const severity = getRecallSeverity(recall.classification);
+                return (
+                  <Card
+                    key={recall.id}
+                    variant={severity === 'high' ? 'danger' : severity === 'moderate' ? 'warning' : 'default'}
+                    hover
+                    onClick={() => navigate('/recalls')}
+                    className="animate-fade-up cursor-pointer"
+                    style={{ animationDelay: `${index * 100}ms` } as React.CSSProperties}
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <Badge variant={severity === 'high' ? 'danger' : severity === 'moderate' ? 'warning' : 'secondary'}>
+                          {recall.classification || 'UNKNOWN'}
+                        </Badge>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {recall.recallInitiationDate ? new Date(recall.recallInitiationDate).toLocaleDateString() : 'Unknown'}
+                        </span>
+                      </div>
+                      <h3 className="font-semibold text-navy-900 dark:text-white mb-1 font-display line-clamp-2">
+                        {recall.productDescription || 'Veterinary Product'}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{recall.recallingFirm || 'Unknown Manufacturer'}</p>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Features Overview */}
       <section className="py-20">

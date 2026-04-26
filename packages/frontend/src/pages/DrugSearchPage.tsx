@@ -7,6 +7,8 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { Skeleton } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 
@@ -35,20 +37,26 @@ export const DrugSearchPage: React.FC = () => {
     route: searchParams.get('route') || '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
   const itemsPerPage = 20;
   const navigate = useNavigate();
 
+  // Debounced search
   useEffect(() => {
-    if (searchParams.get('q')) {
-      performSearch();
-    }
+    const timer = setTimeout(() => {
+      if (searchParams.get('q')) {
+        performSearch();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [searchParams]);
 
   const performSearch = async () => {
     const query = searchParams.get('q') || '';
     if (!query.trim()) {
       setDrugs([]);
+      setTotalResults(0);
       return;
     }
 
@@ -67,37 +75,45 @@ export const DrugSearchPage: React.FC = () => {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/drugs?${params}`);
       const data = await response.json();
 
-      if (data.success && data.data?.drugs) {
-        // Transform API response to match Drug interface
-        const transformedDrugs: Drug[] = data.data.drugs.map((drug: any) => ({
+      if (data.success && data.data) {
+        // The API response can have drugs at data.data or data.data.drugs
+        const drugsList = Array.isArray(data.data) ? data.data : data.data.drugs || [];
+        
+        const transformedDrugs: Drug[] = drugsList.map((drug: any) => ({
           id: drug.id,
-          name: drug.tradeName || drug.genericName,
+          name: drug.tradeName || drug.genericName || 'Unknown',
           genericName: drug.genericName || drug.activeIngredients?.[0]?.name || '',
           manufacturer: drug.manufacturer || 'Unknown',
           species: drug.approvedSpecies || [],
-          totalReports: drug.totalReports || drug.adverseEventStats?.totalReports || 0,
-          seriousReports: drug.seriousReports || drug.adverseEventStats?.seriousReports || 0,
-          deathReports: drug.deathReports || drug.adverseEventStats?.deathReports || 0,
+          totalReports: drug.totalReports || 0,
+          seriousReports: drug.seriousReports || 0,
+          deathReports: drug.deathReports || 0,
           hasRecall: drug.hasActiveRecall || false,
           lastUpdated: drug.lastUpdated || new Date().toISOString(),
         }));
 
         setDrugs(transformedDrugs);
-        setTotalPages(Math.ceil((data.meta?.total || transformedDrugs.length) / itemsPerPage));
+        setTotalResults(data.meta?.total || drugsList.length);
       } else {
         setDrugs([]);
+        setTotalResults(0);
         if (data.error?.message) {
           setError(data.error.message);
         }
       }
-      setLoading(false);
     } catch (err) {
+      console.error('Search error:', err);
       setError('Failed to search drugs. Please try again.');
+      setDrugs([]);
+      setTotalResults(0);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = (query: string) => {
+    setCurrentPage(1);
+    setSearchQuery(query);
     const params = new URLSearchParams();
     if (query) params.set('q', query);
     if (filters.species) params.set('species', filters.species);
@@ -112,6 +128,7 @@ export const DrugSearchPage: React.FC = () => {
   };
 
   const handleFilterChange = (key: string, value: string) => {
+    setCurrentPage(1);
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
@@ -120,29 +137,19 @@ export const DrugSearchPage: React.FC = () => {
     setSearchQuery('');
     setSearchParams({});
     setDrugs([]);
+    setTotalResults(0);
   };
 
-  const getSeverityLevel = (drug: Drug): 'high' | 'moderate' | 'low' => {
-    if (drug.totalReports === 0) return 'low'; // No reports = unknown, default to low
-    const seriousPercentage = (drug.seriousReports / drug.totalReports) * 100;
-    if (seriousPercentage > 30 || drug.deathReports > 100) return 'high';
-    if (seriousPercentage > 15 || drug.deathReports > 50) return 'moderate';
-    return 'low';
-  };
 
   const getSafetyScore = (drug: Drug): number => {
-    if (drug.totalReports === 0) return 100; // No reports = no known issues
+    if (drug.totalReports === 0) return 100;
     const seriousPercentage = (drug.seriousReports / drug.totalReports) * 100;
     const deathPercentage = (drug.deathReports / drug.totalReports) * 100;
     return Math.max(0, Math.round(100 - seriousPercentage - (deathPercentage * 3)));
   };
 
-  const paginatedDrugs = drugs.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
   const hasFilters = filters.species || filters.drugClass || filters.route;
+  const totalPages = Math.ceil(totalResults / itemsPerPage);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-navy-900">
@@ -156,7 +163,7 @@ export const DrugSearchPage: React.FC = () => {
         </div>
 
         {/* Search and Filters */}
-        <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '0.05s' }}>
+        <Card variant="elevated" className="mb-8 animate-fade-up">
           <div className="p-6">
             <form onSubmit={handleFormSearch} className="space-y-6">
               {/* Search Input */}
@@ -177,13 +184,12 @@ export const DrugSearchPage: React.FC = () => {
                       placeholder="Enter drug name (e.g., Apoquel, Bravecto, Heartgard)"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyUp={() => handleSearch(searchQuery)}
                       className="pl-12"
                     />
                   </div>
-                  <Button type="submit" disabled={loading} leftIcon={
-                    loading ? <LoadingSpinner size="sm" /> : undefined
-                  }>
-                    {loading ? 'Searching...' : 'Search'}
+                  <Button type="submit" disabled={loading}>
+                    {loading ? <LoadingSpinner size="sm" /> : 'Search'}
                   </Button>
                 </div>
               </div>
@@ -200,13 +206,12 @@ export const DrugSearchPage: React.FC = () => {
                     onChange={(e) => handleFilterChange('species', e.target.value)}
                   >
                     <option value="">All Species</option>
-                    <option value="dog">Dog</option>
-                    <option value="cat">Cat</option>
-                    <option value="horse">Horse</option>
-                    <option value="other">Other</option>
+                    <option value="canine">Dogs</option>
+                    <option value="feline">Cats</option>
+                    <option value="equine">Horses</option>
+                    <option value="avian">Birds</option>
                   </Select>
                 </div>
-
                 <div>
                   <label htmlFor="drugClass" className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
                     Drug Class
@@ -217,15 +222,11 @@ export const DrugSearchPage: React.FC = () => {
                     onChange={(e) => handleFilterChange('drugClass', e.target.value)}
                   >
                     <option value="">All Classes</option>
-                    <option value="antiparasitic">Antiparasitic</option>
                     <option value="antibiotic">Antibiotic</option>
-                    <option value="anti-inflammatory">Anti-inflammatory</option>
-                    <option value="pain-relief">Pain Relief</option>
-                    <option value="cardiovascular">Cardiovascular</option>
-                    <option value="other">Other</option>
+                    <option value="analgesic">Analgesic</option>
+                    <option value="antiparasitic">Antiparasitic</option>
                   </Select>
                 </div>
-
                 <div>
                   <label htmlFor="route" className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
                     Route
@@ -237,126 +238,125 @@ export const DrugSearchPage: React.FC = () => {
                   >
                     <option value="">All Routes</option>
                     <option value="oral">Oral</option>
+                    <option value="injection">Injection</option>
                     <option value="topical">Topical</option>
-                    <option value="injectable">Injectable</option>
-                    <option value="other">Other</option>
                   </Select>
                 </div>
               </div>
 
               {hasFilters && (
-                <Button type="button" variant="ghost" size="sm" onClick={clearFilters} leftIcon={
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                }>
-                  Clear Filters
-                </Button>
+                <div className="flex justify-end">
+                  <Button type="button" variant="ghost" onClick={clearFilters} size="sm">
+                    Clear Filters
+                  </Button>
+                </div>
               )}
             </form>
           </div>
         </Card>
 
-        {/* Results */}
+        {/* Results Info */}
+        {searchQuery && (
+          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400 animate-fade-up">
+            {loading && 'Searching...'}
+            {!loading && totalResults > 0 && (
+              <>Showing 1-{Math.min(itemsPerPage, drugs.length)} of {totalResults} results</>
+            )}
+            {!loading && totalResults === 0 && drugs.length === 0 && 'No results found'}
+          </div>
+        )}
+
+        {/* Error Alert */}
         {error && (
-          <Alert variant="danger" className="mb-8">
-            <div className="flex items-center justify-between">
-              <span>{error}</span>
-              <Button variant="ghost" size="sm" onClick={performSearch}>Try Again</Button>
-            </div>
+          <Alert variant="danger" className="mb-6 animate-fade-up">
+            {error}
           </Alert>
         )}
 
-        {loading ? (
-          <div className="text-center py-16">
-            <LoadingSpinner size="lg" />
-            <p className="text-gray-600 dark:text-gray-400 mt-4">Searching drugs...</p>
+        {/* Loading State */}
+        {loading && (
+          <div className="space-y-4 animate-fade-up">
+            {[1, 2, 3].map(i => (
+              <Card key={i} variant="elevated" className="p-6">
+                <div className="space-y-3">
+                  <Skeleton height={24} className="w-1/3" />
+                  <Skeleton height={20} className="w-2/3" />
+                  <Skeleton height={20} />
+                </div>
+              </Card>
+            ))}
           </div>
-        ) : drugs.length > 0 ? (
-          <>
-            <div className="mb-6 flex items-center justify-between animate-fade-up" style={{ animationDelay: '0.1s' }}>
-              <p className="text-gray-600 dark:text-gray-400">
-                Found <span className="font-semibold text-navy-900 dark:text-white">{drugs.length}</span> drug{drugs.length !== 1 ? 's' : ''}
-              </p>
-              <Badge variant="info">{drugs.length} results</Badge>
-            </div>
+        )}
 
-            <div className="space-y-4 mb-8">
-              {paginatedDrugs.map((drug, index) => {
-                const severity = getSeverityLevel(drug);
-                const safetyScore = getSafetyScore(drug);
+        {/* Results */}
+        {!loading && drugs.length > 0 && (
+          <>
+            <div className="space-y-4 animate-fade-up">
+              {drugs.map((drug, index) => {
+                
+                const score = getSafetyScore(drug);
                 return (
                   <Card
                     key={drug.id}
                     variant="elevated"
                     hover
-                    className="cursor-pointer animate-fade-up"
-                    style={{ animationDelay: `${0.1 + index * 0.03}s` }}
                     onClick={() => navigate(`/drugs/${drug.id}`)}
+                    className="p-6 cursor-pointer transition-all"
+                    style={{ animationDelay: `${index * 50}ms` } as React.CSSProperties}
                   >
-                    <div className="p-6">
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h3 className="text-xl font-bold text-navy-900 dark:text-white">{drug.name}</h3>
-                            {drug.hasRecall && (
-                              <Badge variant="danger" dot>RECALL</Badge>
+                    <div className="flex items-start gap-6">
+                      <SafetyIndicator score={score} variant="circular" size="md" />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-4 mb-2">
+                          <div>
+                            <h3 className="text-lg font-semibold text-navy-900 dark:text-white">
+                              {drug.name}
+                            </h3>
+                            {drug.genericName && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Generic: {drug.genericName}
+                              </p>
                             )}
-                            <Badge variant={severity === 'high' ? 'danger' : severity === 'moderate' ? 'warning' : 'success'}>
-                              {severity.toUpperCase()} RISK
-                            </Badge>
                           </div>
-                          {drug.genericName && (
-                            <p className="text-gray-600 dark:text-gray-400 mb-1">
-                              <span className="text-gray-500">Generic:</span> {drug.genericName}
-                            </p>
+                          {drug.hasRecall && (
+                            <Badge variant="danger" dot>RECALL</Badge>
                           )}
-                          <p className="text-sm text-gray-500 dark:text-gray-500">
-                            Manufacturer: {drug.manufacturer}
-                          </p>
-                          <div className="flex gap-2 mt-3">
-                            {drug.species.map((species) => (
-                              <Badge key={species} variant="outline" size="sm">
-                                {species}
-                              </Badge>
-                            ))}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                          {drug.manufacturer}
+                        </p>
+                        <div className="flex gap-2 mb-3">
+                          {drug.species.slice(0, 3).map(s => (
+                            <Badge key={s} variant="outline" size="sm">
+                              {s}
+                            </Badge>
+                          ))}
+                          {drug.species.length > 3 && (
+                            <Badge variant="outline" size="sm">
+                              +{drug.species.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <div className="text-lg font-bold text-navy-900 dark:text-white">
+                              {drug.totalReports.toLocaleString()}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400">Total Reports</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold text-warning-600 dark:text-warning-400">
+                              {drug.seriousReports.toLocaleString()}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400">Serious</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold text-accent-600 dark:text-accent-400">
+                              {drug.deathReports.toLocaleString()}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400">Deaths</div>
                           </div>
                         </div>
-                        <SafetyIndicator score={safetyScore} variant="circular" size="md" />
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 dark:bg-navy-800/50 rounded-xl">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-navy-900 dark:text-white">
-                            {drug.totalReports.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Total Reports</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-warning-600 dark:text-warning-400">
-                            {drug.seriousReports.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Serious Events</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-accent-600 dark:text-accent-400">
-                            {drug.deathReports.toLocaleString()}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Deaths Reported</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500 dark:text-gray-500">
-                          Last Updated: {drug.lastUpdated}
-                        </span>
-                        <Button variant="ghost" size="sm" rightIcon={
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        }>
-                          View Details
-                        </Button>
                       </div>
                     </div>
                   </Card>
@@ -366,80 +366,61 @@ export const DrugSearchPage: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center gap-2">
+              <div className="mt-8 flex items-center justify-center gap-2 animate-fade-up">
                 <Button
                   variant="outline"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  leftIcon={
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  }
+                  onClick={() => {
+                    setCurrentPage(currentPage - 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  size="sm"
                 >
                   Previous
                 </Button>
-                <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? 'primary' : 'ghost'}
-                      onClick={() => setCurrentPage(page)}
-                      className="w-10"
-                    >
-                      {page}
-                    </Button>
-                  ))}
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Page {currentPage} of {totalPages}
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  rightIcon={
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  }
+                  onClick={() => {
+                    setCurrentPage(currentPage + 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  size="sm"
                 >
                   Next
                 </Button>
               </div>
             )}
           </>
-        ) : searchParams.get('q') ? (
-          <Card variant="elevated" className="animate-fade-up">
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 dark:bg-navy-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">No Results Found</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Try adjusting your search terms or filters
-              </p>
-              <Button variant="outline" onClick={clearFilters}>Clear Search</Button>
-            </div>
-          </Card>
-        ) : (
-          <Card variant="elevated" className="animate-fade-up">
-            <div className="p-12 text-center">
-              <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-10 h-10 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">Search Veterinary Drugs</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Enter a drug name above to view FDA adverse event reports and safety data
-              </p>
-            </div>
-          </Card>
         )}
 
-        {/* Medical Disclaimer */}
-        <Disclaimer variant="compact" className="mt-8" />
+        {/* Empty State */}
+        {!loading && drugs.length === 0 && !error && (
+          <EmptyState
+            icon={
+              <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            }
+            title={searchQuery ? 'No drugs found' : 'Search for a drug'}
+            description={
+              searchQuery
+                ? 'Try a different search term or check the spelling'
+                : 'Enter a drug name above to search FDA adverse event reports'
+            }
+          />
+        )}
       </div>
+
+      {/* Disclaimer */}
+      <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-gray-700 mt-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Disclaimer variant="inline" />
+        </div>
+      </section>
     </div>
   );
 };

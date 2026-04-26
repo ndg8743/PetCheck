@@ -1,9 +1,12 @@
 /**
  * Green Book Service
  * FDA's database of approved animal drug products
+ * Fetches real data from openFDA animalandveterinary/event.json endpoint
  */
 
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { createLogger } from '../logger';
 import { getFromCache, setInCache } from '../redis';
 import { config } from '../../config';
@@ -20,39 +23,235 @@ import {
   normalizeDrugName,
 } from '@petcheck/shared';
 import { v4 as uuidv4 } from 'uuid';
+import { PET_BRAND_ALIASES } from './brand-aliases';
 
 const logger = createLogger('green-book');
 
-// Green Book data is available via FDA's open data
-// Note: In production, you'd want to periodically sync this data
-const GREEN_BOOK_URL = 'https://www.fda.gov/media/70939/download'; // CSV format
+// Cache file location
+const CACHE_FILE = '/tmp/petcheck-drugs.json';
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// For demo purposes, we'll create a local drug database structure
-// In production, this would be populated from the actual Green Book
-
-interface GreenBookEntry {
-  NADA_Number?: string;
-  ANADA_Number?: string;
-  Trade_Name?: string;
-  International_Nonproprietary_Name?: string;
-  Active_Ingredient?: string;
-  Dosage_Form?: string;
-  Route?: string;
-  Species?: string;
-  Marketing_Status?: string;
-  Application_Type?: string;
-  Sponsor?: string;
-}
-
-// Local drug cache populated from various sources
+// Local drug cache populated from openFDA
 let drugDatabase: Map<string, Drug> = new Map();
 let drugsByIngredient: Map<string, string[]> = new Map();
 let initialized = false;
 
+// Helper function to infer drug class from name
+function inferDrugClass(drugName: string, genericName?: string): DrugClass[] {
+  const name = (drugName + ' ' + (genericName || '')).toLowerCase();
+  const classes: Set<DrugClass> = new Set();
+
+  if (name.includes('amoxi') || name.includes('amoxicillin') || name.includes('penicillin') || 
+      name.includes('cephalosporin') || name.includes('tetracycline')) {
+    classes.add('antibiotic');
+  }
+  if (name.includes('ivermectin') || name.includes('pyrantel') || name.includes('fenbendazole') ||
+      name.includes('praziquantel') || name.includes('selamectin')) {
+    classes.add('antiparasitic');
+  }
+  if (name.includes('carprofen') || name.includes('meloxicam') || name.includes('nsaid') ||
+      name.includes('ibuprofen') || name.includes('aspirin')) {
+    classes.add('nsaid');
+  }
+  if (name.includes('prednisone') || name.includes('dexamethasone') || name.includes('methylprednisolone')) {
+    classes.add('corticosteroid');
+  }
+  if (name.includes('spot-on') || name.includes('topical') || name.includes('shampoo') ||
+      name.includes('ointment') || name.includes('cream')) {
+    classes.add('antiparasitic');
+  }
+
+  return classes.size > 0 ? Array.from(classes) : ['unknown'];
+}
+
+// Helper function to infer routes from drug name
+function inferRoutes(drugName: string): AdministrationRoute[] {
+  const name = drugName.toLowerCase();
+  const routes: Set<AdministrationRoute> = new Set();
+
+  if (name.includes('spot-on') || name.includes('topical') || name.includes('shampoo') ||
+      name.includes('ointment') || name.includes('cream') || name.includes('lotion')) {
+    routes.add('topical');
+  }
+  if (name.includes('injection') || name.includes('injectable') || name.includes('intravenous') ||
+      name.includes('subcutaneous')) {
+    routes.add('injectable');
+  }
+  if (name.includes('tablet') || name.includes('capsule') || name.includes('chewable') ||
+      name.includes('oral') || name.includes('suspension') || name.includes('liquid')) {
+    routes.add('oral');
+  }
+  if (name.includes('eye') || name.includes('ophthalmic')) {
+    routes.add('ophthalmic');
+  }
+  if (name.includes('ear') || name.includes('otic')) {
+    routes.add('otic');
+  }
+
+  return routes.size > 0 ? Array.from(routes) : ['oral'];
+}
+
+// Helper function to infer approved species
+function inferSpecies(drugName: string): SpeciesCategory[] {
+  const name = drugName.toLowerCase();
+  const species: Set<SpeciesCategory> = new Set();
+
+  // Default to both if not specified
+  species.add('canine');
+  species.add('feline');
+
+  return Array.from(species);
+}
+
+// Parse openFDA response to Drug objects
+function parseDrugs(activeIngredients: any[], brandNames: any[]): Drug[] {
+  const drugs: Drug[] = [];
+  const seen = new Set<string>();
+
+  // Add drugs from active ingredients
+  if (activeIngredients && Array.isArray(activeIngredients)) {
+    for (const item of activeIngredients.slice(0, 500)) {
+      if (!item.term) continue;
+      const ingredientName = item.term.trim();
+      if (seen.has(ingredientName.toLowerCase())) continue;
+      seen.add(ingredientName.toLowerCase());
+
+      const drug: Drug = {
+        id: `openfda-ingredient-${uuidv4()}`,
+        tradeName: ingredientName,
+        genericName: ingredientName,
+        activeIngredients: [{ name: ingredientName }],
+        drugClass: inferDrugClass(ingredientName),
+        drugType: 'prescription',
+        routes: inferRoutes(ingredientName),
+        approvedSpecies: inferSpecies(ingredientName),
+        source: 'openfda',
+        lastUpdated: new Date(),
+        totalReports: item.count || 0,
+      };
+      drugs.push(drug);
+    }
+  }
+
+  // Add drugs from brand names
+  if (brandNames && Array.isArray(brandNames)) {
+    for (const item of brandNames.slice(0, 500)) {
+      if (!item.term) continue;
+      const brandName = item.term.trim();
+      if (seen.has(brandName.toLowerCase())) continue;
+      seen.add(brandName.toLowerCase());
+
+      const drug: Drug = {
+        id: `openfda-brand-${uuidv4()}`,
+        tradeName: brandName,
+        activeIngredients: [],
+        drugClass: inferDrugClass(brandName),
+        drugType: 'prescription',
+        routes: inferRoutes(brandName),
+        approvedSpecies: inferSpecies(brandName),
+        source: 'openfda',
+        lastUpdated: new Date(),
+        totalReports: item.count || 0,
+      };
+      drugs.push(drug);
+    }
+  }
+
+// Add curated pet-medication brand-name aliases (openFDA's brand_name aggregation
+  // returns essentially nothing useful, so we hand-curate the most common pet meds)
+  for (const alias of PET_BRAND_ALIASES) {
+    const key = alias.brand.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    drugs.push({
+      id: `pet-brand-${alias.brand.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      tradeName: alias.brand,
+      genericName: alias.generic,
+      activeIngredients: alias.ingredients.map((n) => ({ name: n })),
+      drugClass: alias.drugClass as DrugClass[],
+      drugType: 'prescription',
+      routes: alias.routes as AdministrationRoute[],
+      approvedSpecies: alias.species as SpeciesCategory[],
+      manufacturer: alias.manufacturer,
+      indications: alias.indications,
+      source: 'manual',
+      lastUpdated: new Date(),
+      totalReports: 0,
+    });
+  }
+
+  return drugs;
+}
+
+// Fetch drugs from openFDA
+async function fetchFromOpenFDA(): Promise<Drug[]> {
+  try {
+    logger.info('Fetching drug data from openFDA...');
+
+    // Fetch active ingredients
+    const ingredientsUrl = `${config.openFda.baseUrl}/animalandveterinary/event.json?count=drug.active_ingredients.name.exact&limit=1000`;
+    const ingredientsResponse = await axios.get(ingredientsUrl, {
+      timeout: config.openFda.timeout,
+      params: config.openFda.apiKey ? { api_key: config.openFda.apiKey } : {},
+    });
+
+    // Fetch brand names
+    const brandsUrl = `${config.openFda.baseUrl}/animalandveterinary/event.json?count=drug.brand_name.exact&limit=1000`;
+    const brandsResponse = await axios.get(brandsUrl, {
+      timeout: config.openFda.timeout,
+      params: config.openFda.apiKey ? { api_key: config.openFda.apiKey } : {},
+    });
+
+    const activeIngredients = ingredientsResponse.data?.results || [];
+    const brandNames = brandsResponse.data?.results || [];
+
+    logger.info(`Fetched ${activeIngredients.length} active ingredients and ${brandNames.length} brand names from openFDA`);
+
+    return parseDrugs(activeIngredients, brandNames);
+  } catch (error) {
+    logger.error('Failed to fetch from openFDA:', error);
+    throw error;
+  }
+}
+
+// Load drugs from cache file if fresh
+function loadFromCacheFile(): Drug[] | null {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) {
+      return null;
+    }
+
+    const stats = fs.statSync(CACHE_FILE);
+    const age = Date.now() - stats.mtimeMs;
+
+    if (age > CACHE_MAX_AGE_MS) {
+      logger.info('Drug cache file is stale (> 7 days)');
+      return null;
+    }
+
+    const data = fs.readFileSync(CACHE_FILE, 'utf-8');
+    const drugs = JSON.parse(data) as Drug[];
+    logger.info(`Loaded ${drugs.length} drugs from cache file`);
+    return drugs;
+  } catch (error) {
+    logger.warn('Failed to load from cache file:', error);
+    return null;
+  }
+}
+
+// Save drugs to cache file
+function saveToCacheFile(drugs: Drug[]): void {
+  try {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(drugs, null, 2));
+    logger.info(`Saved ${drugs.length} drugs to cache file`);
+  } catch (error) {
+    logger.warn('Failed to save to cache file:', error);
+  }
+}
+
 export class GreenBookService {
   /**
-   * Initialize the Green Book service with sample/mock data
-   * In production, this would load from the actual Green Book database
+   * Initialize the Green Book service
    */
   async initialize(): Promise<void> {
     if (initialized) return;
@@ -60,19 +259,31 @@ export class GreenBookService {
     const cacheKey = 'greenbook:drugs';
     const cached = await getFromCache<Drug[]>(cacheKey);
 
-    if (cached) {
+    if (cached && !cached.stale) {
       this.loadDrugsIntoMemory(cached.data);
       initialized = true;
-      logger.info(`Loaded ${drugDatabase.size} drugs from cache`);
+      logger.info(`Loaded ${drugDatabase.size} drugs from Redis cache`);
       return;
     }
 
-    // Load sample drug data (in production, fetch from Green Book)
-    const sampleDrugs = this.getSampleDrugData();
-    this.loadDrugsIntoMemory(sampleDrugs);
+    // Try to load from file or fetch from openFDA
+    let drugs: Drug[] | null = loadFromCacheFile();
 
-    // Cache the drug data
-    await setInCache(cacheKey, sampleDrugs, {
+    if (!drugs) {
+      try {
+        drugs = await fetchFromOpenFDA();
+        saveToCacheFile(drugs);
+      } catch (error) {
+        logger.warn('Failed to fetch from openFDA, using sample data:', error);
+        drugs = this.getSampleDrugData();
+        logger.info('[fallback] Using sample drug data instead of openFDA');
+      }
+    }
+
+    this.loadDrugsIntoMemory(drugs);
+
+    // Cache in Redis for fast access
+    await setInCache(cacheKey, drugs, {
       ttl: config.cache.greenBook,
       staleTtl: config.cache.greenBook,
     });
@@ -216,12 +427,29 @@ export class GreenBookService {
   }
 
   /**
-   * Get a drug by name (trade or generic)
+   * Get a drug by name (trade or generic, case-insensitive contains-match)
    */
   async getDrugByName(name: string): Promise<Drug | null> {
     await this.initialize();
+    
+    // First try exact normalized match
     const normalized = normalizeDrugName(name);
-    return drugDatabase.get(`name:${normalized}`) || null;
+    let match = drugDatabase.get(`name:${normalized}`) || null;
+    
+    if (match) return match;
+
+    // Then try case-insensitive contains match
+    const searchTerm = name.toLowerCase();
+    for (const drug of drugDatabase.values()) {
+      if (drug.id && !drug.id.startsWith('name:')) {
+        if (drug.tradeName.toLowerCase().includes(searchTerm) ||
+            drug.genericName?.toLowerCase().includes(searchTerm)) {
+          return drug;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -326,8 +554,7 @@ export class GreenBookService {
   }
 
   /**
-   * Sample drug data for development/demo
-   * In production, this would be loaded from the actual Green Book
+   * Sample drug data as fallback when openFDA is unavailable
    */
   private getSampleDrugData(): Drug[] {
     const drugs: Drug[] = [
@@ -428,138 +655,6 @@ export class GreenBookService {
         totalReports: 2876,
         seriousReports: 412,
         deathReports: 23,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-convenia-cefovecin',
-        tradeName: 'Convenia',
-        genericName: 'Cefovecin',
-        activeIngredients: [{ name: 'Cefovecin', strength: '80mg/ml' }],
-        drugClass: ['antibiotic'],
-        drugType: 'prescription',
-        routes: ['injectable'],
-        approvedSpecies: ['canine', 'feline'],
-        manufacturer: 'Zoetis',
-        indications: ['Skin infections', 'Urinary tract infections'],
-        warnings: ['Long-acting - lasts up to 14 days'],
-        description: 'Convenia is a long-acting injectable antibiotic that provides up to 14 days of treatment with a single injection for skin and soft tissue infections.',
-        totalReports: 1543,
-        seriousReports: 287,
-        deathReports: 34,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-apoquel-oclacitinib',
-        tradeName: 'Apoquel',
-        genericName: 'Oclacitinib',
-        activeIngredients: [{ name: 'Oclacitinib', strength: '16mg' }],
-        drugClass: ['immunosuppressant'],
-        drugType: 'prescription',
-        routes: ['oral'],
-        approvedSpecies: ['canine'],
-        manufacturer: 'Zoetis',
-        indications: ['Allergic dermatitis', 'Atopic dermatitis'],
-        warnings: ['May increase susceptibility to infections', 'Do not use in dogs less than 12 months of age', 'Use with caution in dogs with serious infections', 'Monitor for development of infections and neoplasia'],
-        contraindications: ['Dogs less than 12 months of age'],
-        description: 'Apoquel is used to control itching associated with allergic dermatitis and control of atopic dermatitis in dogs at least 12 months of age.',
-        totalReports: 12543,
-        seriousReports: 3421,
-        deathReports: 234,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-bravecto-fluralaner',
-        tradeName: 'Bravecto',
-        genericName: 'Fluralaner',
-        activeIngredients: [{ name: 'Fluralaner', strength: '112.5mg' }],
-        drugClass: ['antiparasitic'],
-        drugType: 'prescription',
-        routes: ['oral', 'topical'],
-        approvedSpecies: ['canine', 'feline'],
-        manufacturer: 'Merck Animal Health',
-        indications: ['Flea and tick prevention'],
-        warnings: ['Use with caution in dogs with seizure history'],
-        description: 'Bravecto is a long-lasting flea and tick treatment that protects dogs and cats for up to 12 weeks with a single dose.',
-        totalReports: 9876,
-        seriousReports: 2345,
-        deathReports: 178,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-prednisone',
-        tradeName: 'Prednisone',
-        genericName: 'Prednisone',
-        activeIngredients: [{ name: 'Prednisone', strength: '5mg' }],
-        drugClass: ['corticosteroid'],
-        drugType: 'prescription',
-        routes: ['oral'],
-        approvedSpecies: ['canine', 'feline', 'equine'],
-        manufacturer: 'Various',
-        indications: ['Inflammation', 'Allergies', 'Immune-mediated diseases'],
-        warnings: ['Long-term use may cause Cushing-like symptoms'],
-        description: 'Prednisone is a corticosteroid used to treat inflammation, allergies, and immune-mediated conditions in dogs, cats, and horses.',
-        totalReports: 6234,
-        seriousReports: 1567,
-        deathReports: 123,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-gabapentin',
-        tradeName: 'Gabapentin',
-        genericName: 'Gabapentin',
-        activeIngredients: [{ name: 'Gabapentin', strength: '100mg' }],
-        drugClass: ['anticonvulsant', 'analgesic'],
-        drugType: 'prescription',
-        routes: ['oral'],
-        approvedSpecies: ['canine', 'feline'],
-        manufacturer: 'Various',
-        indications: ['Seizures', 'Chronic pain', 'Anxiety'],
-        warnings: ['May cause sedation'],
-        description: 'Gabapentin is used to treat seizures, chronic pain, and anxiety in dogs and cats. It is often prescribed for neuropathic pain.',
-        totalReports: 3456,
-        seriousReports: 623,
-        deathReports: 45,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-cerenia-maropitant',
-        tradeName: 'Cerenia',
-        genericName: 'Maropitant',
-        activeIngredients: [{ name: 'Maropitant Citrate', strength: '24mg' }],
-        drugClass: ['antiemetic'],
-        drugType: 'prescription',
-        routes: ['oral', 'injectable'],
-        approvedSpecies: ['canine', 'feline'],
-        manufacturer: 'Zoetis',
-        indications: ['Motion sickness', 'Vomiting'],
-        description: 'Cerenia is an antiemetic used to prevent and treat vomiting and motion sickness in dogs and cats.',
-        totalReports: 2134,
-        seriousReports: 312,
-        deathReports: 28,
-        source: 'greenbook',
-        lastUpdated: new Date(),
-      },
-      {
-        id: 'drug-adequan-psgag',
-        tradeName: 'Adequan',
-        genericName: 'Polysulfated Glycosaminoglycan',
-        activeIngredients: [{ name: 'PSGAG', strength: '100mg/ml' }],
-        drugClass: ['other'],
-        drugType: 'prescription',
-        routes: ['injectable'],
-        approvedSpecies: ['canine', 'equine'],
-        manufacturer: 'American Regent',
-        indications: ['Osteoarthritis', 'Degenerative joint disease'],
-        description: 'Adequan is an injectable disease-modifying osteoarthritis drug that helps protect cartilage and joint health in dogs and horses.',
-        totalReports: 1876,
-        seriousReports: 234,
-        deathReports: 12,
         source: 'greenbook',
         lastUpdated: new Date(),
       },

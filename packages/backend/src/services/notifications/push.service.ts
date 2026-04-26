@@ -119,7 +119,7 @@ class PushNotificationService {
     const key = `${SUBSCRIPTION_PREFIX}${userId}`;
     const subscriptions = await redis.hgetall(key);
 
-    return Object.values(subscriptions).map((s) => JSON.parse(s));
+    return Object.values(subscriptions).map((s) => JSON.parse(s as string));
   }
 
   /**
