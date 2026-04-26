@@ -31,11 +31,34 @@ FROM nginx:alpine
 # Copy built frontend files
 COPY --from=builder /app/packages/frontend/dist/ /usr/share/nginx/html/
 
-# Copy nginx config for SPA
+# Copy nginx config for SPA.
+# Order matters: more-specific no-cache locations MUST come before the
+# catch-all immutable-asset rule. sw.js / registerSW.js / manifest.json /
+# index.html cannot be cached or PWA users get stuck on stale builds forever.
 RUN echo 'server { \
     listen 80; \
     root /usr/share/nginx/html; \
     index index.html; \
+    location = /sw.js { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        expires off; \
+    } \
+    location = /registerSW.js { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        expires off; \
+    } \
+    location = /manifest.json { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        expires off; \
+    } \
+    location = /index.html { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        expires off; \
+    } \
     location / { \
         try_files $uri $uri/ /index.html; \
     } \
