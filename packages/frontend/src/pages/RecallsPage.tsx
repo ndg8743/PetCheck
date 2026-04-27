@@ -137,7 +137,7 @@ export const RecallsPage: React.FC = () => {
         <div className="mb-8 animate-fade-up">
           <h1 className="text-3xl font-bold text-navy-900 dark:text-white font-display mb-2">Veterinary Product Recalls</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Stay informed about FDA recalls affecting veterinary medications and products
+            FDA-wide recalls affecting veterinary medications and products. Add pets to your profile to see which recalls apply to your medications.
           </p>
         </div>
 
@@ -159,7 +159,10 @@ export const RecallsPage: React.FC = () => {
           </Alert>
         )}
 
-        {/* Stats */}
+        {/* Stats — totals across the entire FDA veterinary recall feed, not user-specific */}
+        <div className="mb-2 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          FDA recall totals (all veterinary products)
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 animate-fade-up" style={{ animationDelay: '0.1s' }}>
           <Card variant="elevated" className="p-4 text-center">
             <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">{recalls.length}</div>
