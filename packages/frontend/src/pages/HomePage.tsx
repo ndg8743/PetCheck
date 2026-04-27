@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -54,6 +54,7 @@ export const HomePage: React.FC = () => {
       title: 'Drug Safety Search',
       description: 'Search FDA adverse event reports for veterinary drugs to make informed decisions.',
       color: 'primary',
+      href: '/drugs',
     },
     {
       icon: (
@@ -64,6 +65,7 @@ export const HomePage: React.FC = () => {
       title: 'Pet Profiles',
       description: 'Manage multiple pet profiles with medications, conditions, and allergies.',
       color: 'secondary',
+      href: '/pets',
     },
     {
       icon: (
@@ -74,6 +76,7 @@ export const HomePage: React.FC = () => {
       title: 'Interaction Checker',
       description: 'Check for potential drug interactions before administering medications.',
       color: 'warning',
+      href: '/interactions',
     },
     {
       icon: (
@@ -84,6 +87,7 @@ export const HomePage: React.FC = () => {
       title: 'Recall Alerts',
       description: 'Stay informed about the latest FDA recalls affecting veterinary products.',
       color: 'accent',
+      href: '/recalls',
     },
     {
       icon: (
@@ -94,6 +98,7 @@ export const HomePage: React.FC = () => {
       title: 'Safety Analytics',
       description: 'View adverse event trends and safety data visualizations.',
       color: 'primary',
+      href: '/researcher',
     },
     {
       icon: (
@@ -105,6 +110,7 @@ export const HomePage: React.FC = () => {
       title: 'Vet Finder',
       description: 'Locate veterinary clinics near you for professional care.',
       color: 'secondary',
+      href: '/vets',
     },
   ];
 
@@ -260,22 +266,63 @@ export const HomePage: React.FC = () => {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
-              <Card
+              <Link
                 key={index}
-                hover
-                className="animate-fade-up"
+                to={feature.href}
+                aria-label={`${feature.title} — ${feature.description}`}
+                className="
+                  group block rounded-2xl
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
+                  dark:focus-visible:ring-offset-navy-900
+                  animate-fade-up
+                "
                 style={{ animationDelay: `${index * 75}ms` } as React.CSSProperties}
               >
-                <div className="p-6">
-                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-4 ${getColorClasses(feature.color)}`}>
-                    {feature.icon}
+                <Card
+                  hover
+                  className="
+                    h-full
+                    transition-all duration-300 ease-out
+                    group-hover:-translate-y-1.5 group-hover:shadow-elevated
+                    group-hover:ring-1 group-hover:ring-primary-500/40
+                  "
+                >
+                  <div className="p-6 relative">
+                    <div
+                      className={`
+                        w-14 h-14 rounded-xl flex items-center justify-center mb-4
+                        transition-transform duration-300 ease-out
+                        group-hover:scale-110 group-hover:rotate-3
+                        ${getColorClasses(feature.color)}
+                      `}
+                    >
+                      {feature.icon}
+                    </div>
+                    <h3 className="
+                      text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display
+                      transition-colors duration-300
+                      group-hover:text-primary-600 dark:group-hover:text-primary-400
+                    ">
+                      {feature.title}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">{feature.description}</p>
+                    <span
+                      className="
+                        absolute right-6 bottom-6
+                        text-primary-600 dark:text-primary-400
+                        opacity-0 -translate-x-2
+                        transition-all duration-300 ease-out
+                        group-hover:opacity-100 group-hover:translate-x-0
+                      "
+                      aria-hidden="true"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </span>
                   </div>
-                  <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">{feature.description}</p>
-                </div>
-              </Card>
+                </Card>
+              </Link>
             ))}
           </div>
         </div>
