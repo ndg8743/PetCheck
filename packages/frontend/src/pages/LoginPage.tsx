@@ -131,52 +131,41 @@ const LoginPageContent: React.FC = () => {
 
             {/* Login Buttons */}
             <div className="space-y-4 mb-6">
-              {/* Guest Login - Primary */}
-              <Button
-                onClick={handleGuestLogin}
-                disabled={isLoading}
-                size="lg"
-                className="w-full"
-                leftIcon={
-                  isLoading ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  )
-                }
-              >
-                {isLoading ? 'Signing in...' : 'Continue as Guest'}
-              </Button>
-
-              {isGoogleConfigured && (
-                <>
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white dark:bg-navy-800 text-gray-500">or</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center">
-                    <React.Suspense fallback={<LoadingSpinner size="sm" />}>
-                      <GoogleLoginComponent
-                        onSuccess={handleGoogleSuccess}
-                        onError={handleGoogleError}
-                        useOneTap
-                        theme="outline"
-                        size="large"
-                        width="320"
-                        text="signin_with"
-                        shape="rectangular"
-                      />
-                    </React.Suspense>
-                  </div>
-                </>
+              {/* Google Sign-In - Primary, required path */}
+              {isGoogleConfigured ? (
+                <div className="flex justify-center">
+                  <React.Suspense fallback={<LoadingSpinner size="sm" />}>
+                    <GoogleLoginComponent
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      useOneTap
+                      theme="filled_blue"
+                      size="large"
+                      width="320"
+                      text="signin_with"
+                      shape="rectangular"
+                    />
+                  </React.Suspense>
+                </div>
+              ) : (
+                <Alert variant="warning">
+                  Google Sign-In isn't available right now. Try the demo link below.
+                </Alert>
               )}
+
+              {/* Demo / guest fallback - intentionally small and secondary */}
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400 pt-2">
+                Just looking around?{' '}
+                <button
+                  type="button"
+                  onClick={handleGuestLogin}
+                  disabled={isLoading}
+                  className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium underline disabled:opacity-50"
+                >
+                  {isLoading ? 'Loading…' : 'try the demo'}
+                </button>{' '}
+                (read-only, no data is saved).
+              </p>
             </div>
 
             {/* Features */}

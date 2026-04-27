@@ -55,8 +55,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          const parsedUser = JSON.parse(storedUser);
+          // Guest sessions are intentionally non-persistent — if the user
+          // closed the tab, they have to opt back in next time.
+          // This prevents the app from silently "defaulting to guest" on every visit.
+          if (parsedUser?.isGuest) {
+            secureStorage.removeItem('authToken');
+            secureStorage.removeItem('user');
+          } else {
+            setToken(storedToken);
+            setUser(parsedUser);
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);

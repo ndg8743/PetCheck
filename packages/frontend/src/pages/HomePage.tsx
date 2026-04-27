@@ -347,7 +347,7 @@ export const HomePage: React.FC = () => {
               onClick={() => navigate('/login')}
               className="bg-white text-primary-600 hover:bg-gray-100"
             >
-              Sign Up / Login
+              Sign in with Google
             </Button>
             <Button
               size="lg"
@@ -355,11 +355,11 @@ export const HomePage: React.FC = () => {
               onClick={() => navigate('/drugs')}
               className="border-white text-white hover:bg-white/10"
             >
-              Continue as Guest
+              Browse drug data
             </Button>
           </div>
           <p className="mt-4 text-sm text-primary-200">
-            No account needed to search drugs, check recalls, or find vets
+            Sign in to save pets and track medications. The drug database, recalls, and vet finder are public.
           </p>
         </div>
       </section>
