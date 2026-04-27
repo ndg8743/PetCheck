@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { SearchBar } from '../components/common/SearchBar';
 import { Disclaimer, TrustIndicator } from '../components/common/Disclaimer';
+import { fetchDrugSuggestions } from '../lib/suggest';
 
 interface Recall {
   id: string;
@@ -171,7 +172,7 @@ export const HomePage: React.FC = () => {
                 placeholder="Search for a veterinary drug (e.g., Apoquel, Bravecto, Heartgard)"
                 variant="hero"
                 size="lg"
-                suggestions={['Apoquel', 'Bravecto', 'Heartgard', 'Simparica', 'Trifexis']}
+                fetchSuggestions={fetchDrugSuggestions}
               />
             </div>
 

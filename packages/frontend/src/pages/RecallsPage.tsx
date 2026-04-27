@@ -7,6 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
+import { fetchDrugSuggestions } from '../lib/suggest';
 
 interface Recall {
   id: string;
@@ -33,6 +34,22 @@ export const RecallsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('active');
   const [speciesFilter, setSpeciesFilter] = useState('');
   const [expandedRecall, setExpandedRecall] = useState<string | null>(null);
+  // Native browser autocomplete options for the recall search input.
+  // Refreshed as the user types so suggestions stay relevant.
+  const [recallSuggestions, setRecallSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetchDrugSuggestions(searchQuery, 10).then((list) => {
+        if (!cancelled) setRecallSuggestions(list);
+      }).catch(() => {});
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     fetchRecalls();
@@ -196,11 +213,18 @@ export const RecallsPage: React.FC = () => {
                 </div>
                 <Input
                   type="text"
-                  placeholder="Search recalls..."
+                  placeholder="Search recalls (e.g., Apoquel, Heartgard)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  list="recall-search-suggestions"
+                  autoComplete="off"
                 />
+                <datalist id="recall-search-suggestions">
+                  {recallSuggestions.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </div>
               <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="">All Status</option>

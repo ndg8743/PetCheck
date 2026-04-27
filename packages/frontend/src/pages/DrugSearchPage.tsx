@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -10,7 +9,9 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Skeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Disclaimer } from '../components/common/Disclaimer';
+import { SearchBar } from '../components/common/SearchBar';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
+import { fetchDrugSuggestions } from '../lib/suggest';
 
 interface Drug {
   id: string;
@@ -166,32 +167,18 @@ export const DrugSearchPage: React.FC = () => {
         <Card variant="elevated" className="mb-8 animate-fade-up">
           <div className="p-6">
             <form onSubmit={handleFormSearch} className="space-y-6">
-              {/* Search Input */}
+              {/* Search Input — autocomplete shows popular drugs on focus,
+                  prefix/substring matches as you type. */}
               <div>
-                <label htmlFor="search" className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
+                <label className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
                   Search for a drug
                 </label>
-                <div className="flex gap-3">
-                  <div className="flex-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <Input
-                      id="search"
-                      type="text"
-                      placeholder="Enter drug name (e.g., Apoquel, Bravecto, Heartgard)"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyUp={() => handleSearch(searchQuery)}
-                      className="pl-12"
-                    />
-                  </div>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? <LoadingSpinner size="sm" /> : 'Search'}
-                  </Button>
-                </div>
+                <SearchBar
+                  placeholder="Enter drug name (e.g., Apoquel, Bravecto, Heartgard)"
+                  onSearch={handleSearch}
+                  isLoading={loading}
+                  fetchSuggestions={fetchDrugSuggestions}
+                />
               </div>
 
               {/* Filters */}

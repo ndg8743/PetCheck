@@ -86,11 +86,37 @@ router.get(
     logger.info('Drug search:', searchParams);
     const result = await greenBookService.search(searchParams);
 
+    if (searchParams.query) {
+      greenBookService.trackSearch(searchParams.query);
+    }
+
     res.json(createApiResponse(result, {
       total: result.total,
       limit: result.limit,
       offset: result.offset,
     }));
+  })
+);
+
+/**
+ * GET /drugs/suggest
+ * Autocomplete-style drug-name suggestions.
+ * - Empty `q` returns the most-searched drugs (with a curated seed fallback).
+ * - With `q` returns prefix + substring matches.
+ * Cheap & cached client-side; safe to hit on every keystroke (debounced).
+ */
+router.get(
+  '/suggest',
+  optionalAuth,
+  [
+    query('q').optional().isString().trim(),
+    query('limit').optional().isInt({ min: 1, max: 25 }).toInt(),
+  ],
+  asyncHandler(async (req: Request, res: Response) => {
+    const q = (req.query.q as string | undefined)?.trim();
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 8;
+    const suggestions = await greenBookService.getSuggestions(q, limit);
+    res.json(createApiResponse({ suggestions, query: q ?? '' }));
   })
 );
 

@@ -7,7 +7,16 @@ export interface SearchBarProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'hero';
+  /**
+   * Pre-loaded suggestion list. If `fetchSuggestions` is also provided,
+   * these are used as the initial / empty-query options.
+   */
   suggestions?: string[];
+  /**
+   * Async callback for dynamic suggestions. Called with the current query
+   * (debounced ~150ms) and on initial focus with empty string.
+   */
+  fetchSuggestions?: (query: string) => Promise<string[]>;
   onSuggestionSelect?: (suggestion: string) => void;
   autoFocus?: boolean;
 }
@@ -20,14 +29,18 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   size = 'md',
   variant = 'default',
   suggestions = [],
+  fetchSuggestions,
   onSuggestionSelect,
   autoFocus = false,
 }) => {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLFormElement>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
@@ -44,6 +57,30 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Debounced suggestion fetch. Cancels stale responses with requestIdRef.
+  useEffect(() => {
+    if (!fetchSuggestions) return;
+    const reqId = ++requestIdRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        setIsFetchingSuggestions(true);
+        const results = await fetchSuggestions(query);
+        if (reqId === requestIdRef.current) setDynamicSuggestions(results);
+      } catch {
+        if (reqId === requestIdRef.current) setDynamicSuggestions([]);
+      } finally {
+        if (reqId === requestIdRef.current) setIsFetchingSuggestions(false);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [query, fetchSuggestions]);
+
+  // Prime empty-query suggestions on first focus.
+  useEffect(() => {
+    if (!fetchSuggestions || !isFocused || query.length > 0 || dynamicSuggestions.length > 0) return;
+    fetchSuggestions('').then((results) => setDynamicSuggestions(results)).catch(() => {});
+  }, [isFocused, fetchSuggestions, query, dynamicSuggestions.length]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,9 +123,22 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   const sizes = sizeClasses[size];
 
-  const filteredSuggestions = suggestions.filter(
-    (s) => s.toLowerCase().includes(query.toLowerCase()) && query.length > 0
+  // Suggestion source priority:
+  //   1. Dynamic (from fetchSuggestions) — server-side autocomplete
+  //   2. Static `suggestions` prop, filtered against query
+  // Empty query is allowed — used to surface "popular" picks on focus.
+  const sourceSuggestions = fetchSuggestions
+    ? dynamicSuggestions
+    : suggestions.filter((s) =>
+        query.length === 0 ? true : s.toLowerCase().includes(query.toLowerCase())
+      );
+
+  // Drop the suggestion that's identical to the current query — no value showing it.
+  const filteredSuggestions = sourceSuggestions.filter(
+    (s) => s.toLowerCase() !== query.trim().toLowerCase()
   );
+
+  const showEmptyQueryHeading = query.length === 0 && filteredSuggestions.length > 0;
 
   const isHero = variant === 'hero';
 
@@ -236,6 +286,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               animate-fade-up
             "
           >
+            {showEmptyQueryHeading && (
+              <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                <span>Popular searches</span>
+                {isFetchingSuggestions && (
+                  <span className="text-gray-400">…</span>
+                )}
+              </div>
+            )}
             <ul className="py-2 max-h-64 overflow-y-auto">
               {filteredSuggestions.map((suggestion, index) => (
                 <li key={index}>

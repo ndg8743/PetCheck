@@ -36,6 +36,25 @@ let drugDatabase: Map<string, Drug> = new Map();
 let drugsByIngredient: Map<string, string[]> = new Map();
 let initialized = false;
 
+// In-memory popularity tracker. Process-local — fine for single-pod deploys;
+// swap for a Redis sorted set if we ever horizontally scale the backend.
+const searchPopularity: Map<string, number> = new Map();
+
+// Curated brand-name seed used when nothing has been searched yet, so the
+// empty-query suggestion list isn't empty on a fresh container.
+const POPULAR_DRUG_SEEDS: string[] = [
+  'Apoquel',
+  'Bravecto',
+  'NexGard',
+  'Heartgard',
+  'Frontline',
+  'Trifexis',
+  'Cerenia',
+  'Rimadyl',
+  'Carprofen',
+  'Metacam',
+];
+
 // Helper function to infer drug class from name
 function inferDrugClass(drugName: string, genericName?: string): DrugClass[] {
   const name = (drugName + ' ' + (genericName || '')).toLowerCase();
@@ -661,6 +680,91 @@ export class GreenBookService {
     ];
 
     return drugs;
+  }
+
+  /**
+   * Record that a query was searched, so it can surface in popular suggestions.
+   * Capped to keep memory bounded.
+   */
+  trackSearch(query: string): void {
+    const q = query.trim();
+    if (!q || q.length > 64) return;
+    const key = q.toLowerCase();
+    searchPopularity.set(key, (searchPopularity.get(key) ?? 0) + 1);
+    if (searchPopularity.size > 500) {
+      // Evict the lowest-scoring half so the map can't grow unbounded.
+      const sorted = [...searchPopularity.entries()].sort((a, b) => a[1] - b[1]);
+      for (const [k] of sorted.slice(0, sorted.length / 2)) searchPopularity.delete(k);
+    }
+  }
+
+  /**
+   * Autocomplete-style drug-name suggestions.
+   * - With `q`: prefix matches first, then substring matches, deduped, capped.
+   * - Without `q`: top searched terms (or curated brand seeds on a cold start).
+   */
+  async getSuggestions(q: string | undefined, limit = 8): Promise<string[]> {
+    await this.initialize();
+    const cap = Math.max(1, Math.min(limit, 25));
+
+    const allNames: string[] = [];
+    const seen = new Set<string>();
+    const pushName = (name?: string) => {
+      if (!name) return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const k = trimmed.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      allNames.push(trimmed);
+    };
+
+    for (const drug of drugDatabase.values()) {
+      if (!drug.id || drug.id.startsWith('name:')) continue;
+      pushName(drug.tradeName);
+      if (drug.genericName) pushName(drug.genericName);
+    }
+
+    if (!q || !q.trim()) {
+      // Empty query: top searched first, then curated seed.
+      const popular = [...searchPopularity.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([k]) => k);
+      const ordered: string[] = [];
+      const addedKeys = new Set<string>();
+      const lookup = new Map<string, string>();
+      for (const n of allNames) lookup.set(n.toLowerCase(), n);
+
+      for (const key of popular) {
+        const display = lookup.get(key) ?? key;
+        if (!addedKeys.has(key)) {
+          addedKeys.add(key);
+          ordered.push(display);
+        }
+        if (ordered.length >= cap) return ordered;
+      }
+      for (const seed of POPULAR_DRUG_SEEDS) {
+        const key = seed.toLowerCase();
+        const display = lookup.get(key) ?? seed;
+        if (!addedKeys.has(key)) {
+          addedKeys.add(key);
+          ordered.push(display);
+        }
+        if (ordered.length >= cap) return ordered;
+      }
+      return ordered;
+    }
+
+    const query = q.trim().toLowerCase();
+    const startsWith: string[] = [];
+    const contains: string[] = [];
+    for (const name of allNames) {
+      const lc = name.toLowerCase();
+      if (lc.startsWith(query)) startsWith.push(name);
+      else if (lc.includes(query)) contains.push(name);
+      if (startsWith.length >= cap) break;
+    }
+    return [...startsWith, ...contains].slice(0, cap);
   }
 }
 
