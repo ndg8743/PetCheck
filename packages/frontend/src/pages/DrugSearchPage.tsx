@@ -123,11 +123,6 @@ export const DrugSearchPage: React.FC = () => {
     setSearchParams(params);
   };
 
-  const handleFormSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleSearch(searchQuery);
-  };
-
   const handleFilterChange = (key: string, value: string) => {
     setCurrentPage(1);
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -163,10 +158,12 @@ export const DrugSearchPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Search and Filters */}
+        {/* Search and Filters — SearchBar manages its own form internally,
+            so we use a plain div wrapper here (nested forms broke the icon-
+            button submit). */}
         <Card variant="elevated" className="mb-8 animate-fade-up">
           <div className="p-6">
-            <form onSubmit={handleFormSearch} className="space-y-6">
+            <div className="space-y-6">
               {/* Search Input — autocomplete shows popular drugs on focus,
                   prefix/substring matches as you type. */}
               <div>
@@ -178,6 +175,7 @@ export const DrugSearchPage: React.FC = () => {
                   onSearch={handleSearch}
                   isLoading={loading}
                   fetchSuggestions={fetchDrugSuggestions}
+                  initialQuery={searchQuery}
                 />
               </div>
 
@@ -238,7 +236,7 @@ export const DrugSearchPage: React.FC = () => {
                   </Button>
                 </div>
               )}
-            </form>
+            </div>
           </div>
         </Card>
 

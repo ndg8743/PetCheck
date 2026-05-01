@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { normalizeBreed } from '../lib/petDisplay';
+import { useAuth } from '../contexts/AuthContext';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
@@ -82,6 +83,8 @@ export const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isGuest = !!user?.isGuest;
 
   useEffect(() => {
     fetchDashboardData();
@@ -252,12 +255,12 @@ export const DashboardPage: React.FC = () => {
         <div className="mb-8 animate-fade-up" style={{ animationDelay: '0.15s' }}>
           <h2 className="text-lg font-semibold text-navy-900 dark:text-white mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <QuickActionCard
+            {!isGuest && <QuickActionCard
               icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>}
               label="Add Pet"
               onClick={() => navigate('/pets/new')}
               color="primary"
-            />
+            />}
             <QuickActionCard
               icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
               label="Search Drugs"

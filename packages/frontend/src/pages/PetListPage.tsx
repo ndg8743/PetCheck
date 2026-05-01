@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { normalizeBreed } from '../lib/petDisplay';
+import { useAuth } from '../contexts/AuthContext';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
@@ -33,6 +34,8 @@ export const PetListPage: React.FC = () => {
   const [speciesFilter, setSpeciesFilter] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; petId: string; petName: string }>({ open: false, petId: '', petName: '' });
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isGuest = !!user?.isGuest;
 
   useEffect(() => {
     fetchPets();
@@ -134,7 +137,7 @@ export const PetListPage: React.FC = () => {
               Manage your pet profiles and track their medications
             </p>
           </div>
-          <Button
+          {!isGuest && <Button
             onClick={() => navigate('/pets/new')}
             className="whitespace-nowrap shrink-0"
             leftIcon={
@@ -144,7 +147,7 @@ export const PetListPage: React.FC = () => {
             }
           >
             Add New Pet
-          </Button>
+          </Button>}
         </div>
 
         {/* Search and Filters */}

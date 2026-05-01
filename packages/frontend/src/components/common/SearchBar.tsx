@@ -19,6 +19,11 @@ export interface SearchBarProps {
   fetchSuggestions?: (query: string) => Promise<string[]>;
   onSuggestionSelect?: (suggestion: string) => void;
   autoFocus?: boolean;
+  /**
+   * Seed value for the input (e.g. from a URL `?q=` param). Hydrated into
+   * internal state on mount and whenever it changes from the parent.
+   */
+  initialQuery?: string;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -32,9 +37,16 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   fetchSuggestions,
   onSuggestionSelect,
   autoFocus = false,
+  initialQuery = '',
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Re-hydrate when the parent's URL-derived value changes (e.g. browser back/forward).
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);

@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { query, param, validationResult } from 'express-validator';
-import { greenBookService } from '../services/openfda';
+import { greenBookService, adverseEventsService } from '../services/openfda';
 import { optionalAuth } from '../middleware/auth';
 import { searchRateLimiter } from '../middleware/rate-limit';
 import { asyncHandler, AppError } from '../middleware/error-handler';
@@ -89,6 +89,24 @@ router.get(
     if (searchParams.query) {
       greenBookService.trackSearch(searchParams.query);
     }
+
+    // Enrich list rows with real adverse-event totals. The Green Book seed
+    // entries hardcode totalReports=0; the adverse-events summary endpoint
+    // is what the detail page uses, so we backfill here for parity. The
+    // summary call is Redis-cached, so cost amortizes after the first hit.
+    await Promise.all(
+      result.drugs.map(async (drug) => {
+        if (drug.totalReports && drug.totalReports > 0) return;
+        try {
+          const summary = await adverseEventsService.getDrugSummary(drug.tradeName, drug.genericName);
+          drug.totalReports = summary.totalReports ?? 0;
+          drug.seriousReports = summary.seriousReports ?? 0;
+          drug.deathReports = summary.deathReports ?? 0;
+        } catch {
+          // Leave zeros — don't fail the list response if a single lookup errors.
+        }
+      })
+    );
 
     res.json(createApiResponse(result, {
       total: result.total,

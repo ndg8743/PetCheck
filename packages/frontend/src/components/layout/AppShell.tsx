@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { GuestBanner } from '../common/GuestBanner';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -80,6 +81,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           </button>
         </div>
       </header>
+
+      <GuestBanner />
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (

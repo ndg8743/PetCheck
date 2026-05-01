@@ -163,6 +163,7 @@ router.get(
 router.delete(
   '/sessions/:sessionId',
   authenticate,
+  requireNonGuest,
   [
     param('sessionId').isUUID().withMessage('Invalid session ID'),
   ],
@@ -186,6 +187,7 @@ router.delete(
 router.delete(
   '/sessions',
   authenticate,
+  requireNonGuest,
   asyncHandler(async (req: Request, res: Response) => {
     const revokedCount = await googleAuthService.revokeAllOtherSessions(req.userId!, req.token!);
     res.json(createApiResponse({

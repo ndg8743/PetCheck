@@ -156,6 +156,7 @@ router.get(
 router.post(
   '/test',
   authenticate,
+  requireNonGuest,
   asyncHandler(async (req: Request, res: Response) => {
     if (!config.isDev) {
       throw new AppError(

@@ -10,7 +10,23 @@ import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { Alert } from '../components/ui/Alert';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { ConfirmDialog } from '../components/ui/Modal';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+
+// Friendly labels for the medication-frequency enum the backend stores.
+const FREQUENCY_LABELS: Record<string, string> = {
+  once_daily: 'Once daily',
+  twice_daily: 'Twice daily',
+  three_times_daily: 'Three times daily',
+  four_times_daily: 'Four times daily',
+  every_other_day: 'Every other day',
+  weekly: 'Weekly',
+  biweekly: 'Every two weeks',
+  monthly: 'Monthly',
+  as_needed: 'As needed',
+  custom: 'Custom schedule',
+};
+const formatFrequency = (f: string): string => FREQUENCY_LABELS[f] ?? f;
 
 interface Pet {
   id: string;
@@ -53,6 +69,8 @@ interface Allergy {
 export const PetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isGuest = !!user?.isGuest;
   const [pet, setPet] = useState<Pet | null>(null);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [conditions, setConditions] = useState<Condition[]>([]);
@@ -354,12 +372,12 @@ export const PetDetailPage: React.FC = () => {
               {/* Safety Score & Actions */}
               <div className="flex flex-col items-center sm:items-end gap-4">
                 <SafetyIndicator score={safetyScore} size="lg" showLabel />
-                <Button variant="outline" onClick={() => navigate(`/pets/${pet.id}/edit`)}>
+                {!isGuest && <Button variant="outline" onClick={() => navigate(`/pets/${pet.id}/edit`)}>
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                   Edit Profile
-                </Button>
+                </Button>}
               </div>
             </div>
 
@@ -401,12 +419,12 @@ export const PetDetailPage: React.FC = () => {
                   Current Medications
                 </h2>
               </div>
-              <Button onClick={() => setShowMedicationForm(true)}>
+              {!isGuest && <Button onClick={() => setShowMedicationForm(true)}>
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Add Medication
-              </Button>
+              </Button>}
             </div>
 
             {/* Add/Edit Medication Form */}
@@ -434,14 +452,24 @@ export const PetDetailPage: React.FC = () => {
                       placeholder="e.g., 16mg, 1 tablet"
                       required
                     />
-                    <Input
+                    <Select
                       label="Frequency"
-                      type="text"
                       value={medicationForm.frequency}
                       onChange={(e) => setMedicationForm({ ...medicationForm, frequency: e.target.value })}
-                      placeholder="e.g., Twice daily, Monthly"
                       required
-                    />
+                    >
+                      <option value="">Select frequency</option>
+                      <option value="once_daily">Once daily</option>
+                      <option value="twice_daily">Twice daily</option>
+                      <option value="three_times_daily">Three times daily</option>
+                      <option value="four_times_daily">Four times daily</option>
+                      <option value="every_other_day">Every other day</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Every two weeks</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="as_needed">As needed</option>
+                      <option value="custom">Custom</option>
+                    </Select>
                     <Select
                       label="Route"
                       value={medicationForm.route}
@@ -525,7 +553,7 @@ export const PetDetailPage: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-slate-500 dark:text-slate-400">Frequency:</span>{' '}
-                            <span className="font-medium text-navy-900 dark:text-white">{medication.frequency}</span>
+                            <span className="font-medium text-navy-900 dark:text-white">{formatFrequency(medication.frequency)}</span>
                           </div>
                           <div>
                             <span className="text-slate-500 dark:text-slate-400">Since:</span>{' '}

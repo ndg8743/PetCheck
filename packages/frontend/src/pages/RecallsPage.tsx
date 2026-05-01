@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -25,11 +25,13 @@ interface Recall {
 
 export const RecallsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [recalls, setRecalls] = useState<Recall[]>([]);
   const [filteredRecalls, setFilteredRecalls] = useState<Recall[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Hydrate `?q=` so direct nav / shared URLs prefill the search box.
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const [severityFilter, setSeverityFilter] = useState('');
   // Default to "All" — at any given time most recalls are resolved, so an
   // "Active" default makes the page look empty on first load.
@@ -54,7 +56,9 @@ export const RecallsPage: React.FC = () => {
   }, [searchQuery]);
 
   useEffect(() => {
-    fetchRecalls();
+    // Run the initial fetch with whatever ?q= we hydrated from the URL.
+    fetchRecalls(searchQuery || undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -206,7 +210,13 @@ export const RecallsPage: React.FC = () => {
         {/* Search and Filters */}
         <Card variant="elevated" className="mb-6 animate-fade-up" style={{ animationDelay: '0.15s' }}>
           <div className="p-4">
-            <form onSubmit={(e) => { e.preventDefault(); fetchRecalls(searchQuery); }} className="grid md:grid-cols-6 gap-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              fetchRecalls(searchQuery);
+              const next = new URLSearchParams(searchParams);
+              if (searchQuery.trim()) next.set('q', searchQuery.trim()); else next.delete('q');
+              setSearchParams(next);
+            }} className="grid md:grid-cols-6 gap-4">
               <div className="md:col-span-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
