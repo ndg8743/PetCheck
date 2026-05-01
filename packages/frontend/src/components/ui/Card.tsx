@@ -28,40 +28,40 @@ export interface CardFooterProps {
 const variantClasses = {
   default: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     shadow-card
   `,
   elevated: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     shadow-elevated
   `,
   glass: `
     backdrop-blur-xl bg-white/80 dark:bg-navy-800/80
-    border border-white/20 dark:border-gray-700/50
+    border border-white/20 dark:border-navy-700/50
     shadow-glass
   `,
   accent: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     border-l-4 border-l-primary-500
     shadow-card
   `,
   danger: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     border-l-4 border-l-accent-500
     shadow-card
   `,
   warning: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     border-l-4 border-l-warning-500
     shadow-card
   `,
   success: `
     bg-white dark:bg-navy-800
-    border border-gray-200 dark:border-gray-700
+    border border-gray-200 dark:border-navy-700
     border-l-4 border-l-secondary-500
     shadow-card
   `,
@@ -107,7 +107,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
     <div
       className={`
         px-6 py-4
-        border-b border-gray-200 dark:border-gray-700
+        border-b border-gray-200 dark:border-navy-700
         flex items-center justify-between
         ${className}
       `}
@@ -133,7 +133,7 @@ export const CardFooter: React.FC<CardFooterProps> = ({
     <div
       className={`
         px-6 py-4
-        border-t border-gray-200 dark:border-gray-700
+        border-t border-gray-200 dark:border-navy-700
         bg-gray-50 dark:bg-navy-900/50
         ${className}
       `}

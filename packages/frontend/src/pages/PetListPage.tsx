@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
 import { normalizeBreed } from '../lib/petDisplay';
 import { useAuth } from '../contexts/AuthContext';
@@ -184,41 +185,19 @@ export const PetListPage: React.FC = () => {
         {/* Pet List */}
         {filteredPets.length === 0 ? (
           <Card variant="elevated" className="animate-fade-up">
-            <div className="p-12 text-center">
-              {pets.length === 0 ? (
-                <>
-                  <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-10 h-10 text-primary-600 dark:text-primary-400" viewBox="0 0 32 32" fill="currentColor">
-                      <circle cx="16" cy="20" r="6" />
-                      <circle cx="10" cy="14" r="3" />
-                      <circle cx="22" cy="14" r="3" />
-                      <circle cx="7" cy="19" r="2.5" />
-                      <circle cx="25" cy="19" r="2.5" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">No Pets Yet</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    Add your first pet to start tracking their medications and health
-                  </p>
-                  <Button onClick={() => navigate('/pets/new')}>Add Your First Pet</Button>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-navy-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">No Results Found</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    Try adjusting your search terms or filters
-                  </p>
-                  <Button variant="outline" onClick={() => { setSearchQuery(''); setSpeciesFilter(''); }}>
-                    Clear Filters
-                  </Button>
-                </>
-              )}
-            </div>
+            {pets.length === 0 ? (
+              <EmptyState
+                title="No Pets Yet"
+                description="Add your first pet to start tracking their medications and health."
+                action={!isGuest ? { label: 'Add Your First Pet', onClick: () => navigate('/pets/new') } : undefined}
+              />
+            ) : (
+              <EmptyState
+                title="No Results Found"
+                description="Try adjusting your search terms or filters."
+                action={{ label: 'Clear Filters', onClick: () => { setSearchQuery(''); setSpeciesFilter(''); } }}
+              />
+            )}
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -58,7 +58,7 @@ export const Tabs: React.FC<TabsProps> = ({
 
   const variantClasses = {
     underline: {
-      container: 'border-b border-gray-200 dark:border-gray-700',
+      container: 'border-b border-gray-200 dark:border-navy-700',
       nav: 'relative -mb-px flex space-x-8',
       tab: (isActive: boolean) => `
         ${baseTabClasses}
@@ -90,12 +90,12 @@ export const Tabs: React.FC<TabsProps> = ({
       indicator: '',
     },
     boxed: {
-      container: 'border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden',
-      nav: 'flex bg-gray-50 dark:bg-navy-800 border-b border-gray-200 dark:border-gray-700',
+      container: 'border border-gray-200 dark:border-navy-700 rounded-lg overflow-hidden',
+      nav: 'flex bg-gray-50 dark:bg-navy-800 border-b border-gray-200 dark:border-navy-700',
       tab: (isActive: boolean) => `
         ${baseTabClasses}
         flex-1 whitespace-nowrap py-3 px-4 text-center
-        border-r border-gray-200 dark:border-gray-700 last:border-r-0
+        border-r border-gray-200 dark:border-navy-700 last:border-r-0
         ${
           isActive
             ? 'bg-white dark:bg-navy-700 text-primary-600 dark:text-primary-400'

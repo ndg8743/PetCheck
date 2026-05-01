@@ -7,6 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
+import { EmptyState } from '../components/ui/EmptyState';
 import { fetchDrugSuggestions } from '../lib/suggest';
 import { useUserRecalls } from '../hooks/useUserRecalls';
 
@@ -269,17 +270,18 @@ export const RecallsPage: React.FC = () => {
 
         {/* Recalls List */}
         {filteredRecalls.length === 0 ? (
-          <Card variant="elevated" className="animate-fade-up">
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 dark:bg-navy-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-navy-900 dark:text-white mb-2 font-display">No Recalls Found</h3>
-              <p className="text-gray-600 dark:text-gray-400">Try adjusting your filters or search terms</p>
-            </div>
-          </Card>
+          (() => {
+            const hasActiveFilter = !!(searchQuery || severityFilter || statusFilter || speciesFilter);
+            return (
+              <Card variant="elevated" className="animate-fade-up">
+                <EmptyState
+                  title="No Recalls Found"
+                  description={hasActiveFilter ? 'Try adjusting your filters or search terms.' : 'There are no FDA veterinary recalls matching your view right now.'}
+                  action={hasActiveFilter ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setSeverityFilter(''); setStatusFilter(''); setSpeciesFilter(''); } } : undefined}
+                />
+              </Card>
+            );
+          })()
         ) : (
           <div className="space-y-4">
             {filteredRecalls.map((recall, index) => (
@@ -317,7 +319,7 @@ export const RecallsPage: React.FC = () => {
                   </div>
 
                   {expandedRecall === recall.id && (
-                    <div className="space-y-4 mb-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="space-y-4 mb-4 pt-4 border-t border-gray-200 dark:border-navy-700">
                       <div>
                         <h4 className="font-semibold text-navy-900 dark:text-white mb-1">Details</h4>
                         <p className="text-gray-700 dark:text-gray-300">{recall.details}</p>

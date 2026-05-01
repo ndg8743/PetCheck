@@ -140,7 +140,7 @@ export const NotFoundPage: React.FC = () => {
             </div>
 
             {/* Quick Links */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-8">
+            <div className="border-t border-gray-200 dark:border-navy-700 pt-8">
               <p className="text-sm font-semibold text-navy-900 dark:text-white mb-4">
                 Or try one of these popular pages:
               </p>

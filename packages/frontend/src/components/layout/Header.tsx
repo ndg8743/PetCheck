@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
             ? 'bg-white/80 dark:bg-navy-900/80 backdrop-blur-xl shadow-sm'
             : 'bg-white dark:bg-navy-900'
         }
-        border-b border-gray-200/80 dark:border-gray-700/80
+        border-b border-gray-200/80 dark:border-navy-700/80
       `}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -215,7 +215,7 @@ export const Header: React.FC<HeaderProps> = ({
                     absolute right-0 mt-2 w-56
                     bg-white dark:bg-navy-800
                     rounded-xl shadow-elevated
-                    border border-gray-200 dark:border-gray-700
+                    border border-gray-200 dark:border-navy-700
                     overflow-hidden
                     animate-scale-in origin-top-right
                     z-50
@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
                   role="menu"
                 >
                   {userName && (
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-navy-700">
                       <p className="text-sm font-medium text-navy-900 dark:text-white">
                         {userName}
                       </p>
@@ -282,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   </div>
                   {onLogout && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 py-1">
+                    <div className="border-t border-gray-200 dark:border-navy-700 py-1">
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);

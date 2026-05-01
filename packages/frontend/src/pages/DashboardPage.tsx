@@ -450,7 +450,7 @@ export const DashboardPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-navy-700">
                         <Button
                           variant="ghost"
                           className="w-full"

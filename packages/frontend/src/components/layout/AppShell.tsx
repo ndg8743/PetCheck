@@ -51,9 +51,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-navy-900">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-navy-700 shadow-sm">
+    <div className="min-h-screen bg-gray-50 dark:bg-navy-900 pb-16 md:pb-0">
+      {/* Header — suppressed when printing */}
+      <header className="sticky top-0 z-40 bg-white dark:bg-navy-800 border-b border-gray-200 dark:border-navy-700 shadow-sm print:hidden">
         <div className="flex items-center justify-between h-14 px-4">
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-2">
@@ -167,6 +167,36 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
       {/* Main Content */}
       <main>{children}</main>
+
+      {/* Mobile bottom-tab nav — visible only below md, hidden on print. */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white dark:bg-navy-800 border-t border-gray-200 dark:border-navy-700 grid grid-cols-5 h-16 print:hidden">
+        {[
+          { href: '/dashboard', label: 'Home',    icon: 'home' },
+          { href: '/pets',      label: 'Pets',    icon: 'paw' },
+          { href: '/drugs',     label: 'Drugs',   icon: 'search' },
+          { href: '/recalls',   label: 'Recalls', icon: 'alert' },
+          { href: '/profile',   label: 'Profile', icon: 'user' },
+        ].map((tab) => {
+          const isActive = location.pathname === tab.href || location.pathname.startsWith(tab.href + '/');
+          return (
+            <Link
+              key={tab.href}
+              to={tab.href}
+              aria-label={tab.label}
+              className={`flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors ${
+                isActive
+                  ? 'text-primary-600 dark:text-primary-400'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {getIcon(tab.icon)}
+              </svg>
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 };

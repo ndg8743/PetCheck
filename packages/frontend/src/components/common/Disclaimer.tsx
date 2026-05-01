@@ -193,7 +193,7 @@ export const Disclaimer: React.FC<DisclaimerProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-gray-700">
+      <div className="px-5 py-3 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-navy-700">
         <p className="text-xs text-gray-500 dark:text-gray-400">
           PetCheck and its operators are not responsible for any decisions made based on
           information provided through this platform. Use of this service is at your own risk.

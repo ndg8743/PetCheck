@@ -261,7 +261,7 @@ export const ProfilePage: React.FC = () => {
                   </Select>
                 </div>
 
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="pt-4 border-t border-gray-200 dark:border-navy-700">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     <strong className="text-navy-900 dark:text-white">Account Created:</strong>{' '}
                     {new Date(profile.createdAt).toLocaleDateString()}
@@ -355,7 +355,7 @@ export const ProfilePage: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="p-4 bg-gray-50 dark:bg-navy-800/50 border border-gray-200 dark:border-gray-700 rounded-xl">
+                <div className="p-4 bg-gray-50 dark:bg-navy-800/50 border border-gray-200 dark:border-navy-700 rounded-xl">
                   <h3 className="font-semibold text-navy-900 dark:text-white mb-2">Data Privacy</h3>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                     Review our privacy policy and learn how we protect your data.

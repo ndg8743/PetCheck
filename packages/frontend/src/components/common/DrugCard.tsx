@@ -93,7 +93,7 @@ export const DrugCard: React.FC<DrugCardProps> = ({
         className={`
           w-full text-left p-4 rounded-xl
           bg-white dark:bg-navy-800
-          border border-gray-200 dark:border-gray-700
+          border border-gray-200 dark:border-navy-700
           hover:border-primary-300 dark:hover:border-primary-600
           hover:shadow-card-hover
           transition-all duration-200
@@ -136,7 +136,7 @@ export const DrugCard: React.FC<DrugCardProps> = ({
       className={`
         relative overflow-hidden rounded-2xl
         bg-white dark:bg-navy-800
-        border border-gray-200 dark:border-gray-700
+        border border-gray-200 dark:border-navy-700
         ${onClick ? 'cursor-pointer hover:shadow-card-hover hover:border-primary-300 dark:hover:border-primary-600' : ''}
         transition-all duration-300 ease-out
         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
@@ -208,7 +208,7 @@ export const DrugCard: React.FC<DrugCardProps> = ({
 
         {/* Stats footer */}
         {(adverseEventCount !== undefined || recallCount !== undefined) && (
-          <div className="flex items-center gap-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-4 pt-4 border-t border-gray-100 dark:border-navy-700">
             {adverseEventCount !== undefined && (
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700/50">

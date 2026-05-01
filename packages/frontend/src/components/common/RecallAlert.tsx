@@ -176,7 +176,7 @@ export const RecallAlert: React.FC<RecallAlertProps> = ({
       <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-accent-500 to-accent-600" />
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 px-5 py-4 pl-6 border-b border-gray-100 dark:border-gray-700">
+      <div className="flex items-center justify-between gap-4 px-5 py-4 pl-6 border-b border-gray-100 dark:border-navy-700">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-accent-100 dark:bg-accent-900/30">
             <svg
@@ -291,7 +291,7 @@ export const RecallAlert: React.FC<RecallAlertProps> = ({
 
       {/* Show more */}
       {activeRecalls.length > 3 && (
-        <div className="px-5 py-3 pl-6 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-gray-700">
+        <div className="px-5 py-3 pl-6 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-navy-700">
           <button
             onClick={() => onViewDetails?.(activeRecalls[0]?.id)}
             className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"

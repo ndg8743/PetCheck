@@ -413,7 +413,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* Medical Disclaimer */}
-      <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-gray-700">
+      <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-navy-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Disclaimer variant="inline" />
         </div>

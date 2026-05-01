@@ -293,7 +293,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               absolute z-20 w-full mt-2
               bg-white dark:bg-navy-800
               rounded-xl shadow-elevated
-              border border-gray-200 dark:border-gray-700
+              border border-gray-200 dark:border-navy-700
               overflow-hidden
               animate-fade-up
             "

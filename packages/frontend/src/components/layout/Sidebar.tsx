@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           w-64 flex-shrink-0
           bg-white dark:bg-navy-800
-          border-r border-gray-200 dark:border-gray-700
+          border-r border-gray-200 dark:border-navy-700
           lg:bg-transparent lg:dark:bg-transparent
           lg:border-r-0
         `}
@@ -64,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         <div className="h-full flex flex-col">
           {/* Mobile header */}
-          <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 dark:border-navy-700">
             <span className="text-lg font-semibold font-display text-navy-900 dark:text-white">
               Menu
             </span>
@@ -150,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-4 border-t border-gray-200 dark:border-navy-700">
             <div className="px-3 py-2 rounded-lg bg-primary-50 dark:bg-primary-900/20">
               <div className="flex items-center gap-2 text-primary-700 dark:text-primary-300">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

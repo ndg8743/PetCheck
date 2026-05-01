@@ -7,6 +7,7 @@ import { normalizeBreed } from '../lib/petDisplay';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Alert } from '../components/ui/Alert';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -398,7 +399,67 @@ export const PetDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-navy-950">
-      <div className="container mx-auto px-4 py-8">
+      {/* Print-only summary — visible only when the user hits Print. The
+          rest of the app chrome is suppressed via `print:hidden` on the
+          AppShell header / banners. */}
+      <div className="hidden print:block p-8 text-black bg-white">
+        <h1 className="text-3xl font-bold mb-1">PetCheck — Pet Record</h1>
+        <p className="text-sm mb-6">Generated {new Date().toLocaleString()}</p>
+        <h2 className="text-2xl font-bold mt-4 mb-2">{pet.name}</h2>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm mb-6">
+          <div><strong>Species:</strong> {pet.species}</div>
+          <div><strong>Breed:</strong> {pet.breed}</div>
+          <div><strong>Age:</strong> {pet.age} years</div>
+          <div><strong>Weight:</strong> {pet.weight} lb</div>
+          <div><strong>Birth date:</strong> {pet.birthDate || '—'}</div>
+        </div>
+        {pet.veterinarian?.clinicName && (
+          <section className="mb-6">
+            <h3 className="text-lg font-bold mb-1">Primary Vet</h3>
+            <div className="text-sm">{pet.veterinarian.clinicName}</div>
+            {pet.veterinarian.address && <div className="text-sm">{pet.veterinarian.address}</div>}
+            {pet.veterinarian.phone && <div className="text-sm">{pet.veterinarian.phone}</div>}
+          </section>
+        )}
+        <section className="mb-6">
+          <h3 className="text-lg font-bold mb-1">Medications ({medications.length})</h3>
+          {medications.length === 0 ? (
+            <div className="text-sm">None on file.</div>
+          ) : (
+            <ul className="text-sm list-disc pl-5 space-y-1">
+              {medications.map((m) => (
+                <li key={m.id}>
+                  <strong>{m.drugName}</strong> — {m.dosage}, {formatFrequency(m.frequency)}
+                  {m.prescribedBy ? ` (Rx: ${m.prescribedBy})` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="mb-6">
+          <h3 className="text-lg font-bold mb-1">Medical conditions ({conditions.length})</h3>
+          {conditions.length === 0 ? (
+            <div className="text-sm">None on file.</div>
+          ) : (
+            <ul className="text-sm list-disc pl-5 space-y-1">
+              {conditions.map((c) => (<li key={c.id}><strong>{c.name}</strong>{c.severity ? ` — ${c.severity}` : ''}</li>))}
+            </ul>
+          )}
+        </section>
+        <section className="mb-6">
+          <h3 className="text-lg font-bold mb-1">Allergies ({allergies.length})</h3>
+          {allergies.length === 0 ? (
+            <div className="text-sm">None on file.</div>
+          ) : (
+            <ul className="text-sm list-disc pl-5 space-y-1">
+              {allergies.map((a) => (<li key={a.id}><strong>{a.allergen}</strong>{a.severity ? ` — ${a.severity}` : ''}</li>))}
+            </ul>
+          )}
+        </section>
+        <p className="text-xs mt-8 italic">PetCheck is for informational purposes only. Always consult your veterinarian.</p>
+      </div>
+
+      <div className="container mx-auto px-4 py-8 print:hidden">
         {/* Back Button */}
         <button
           onClick={() => navigate('/pets')}
@@ -440,12 +501,20 @@ export const PetDetailPage: React.FC = () => {
               {/* Safety Score & Actions */}
               <div className="flex flex-col items-center sm:items-end gap-4">
                 <SafetyIndicator score={safetyScore} size="lg" showLabel />
-                {!isGuest && <Button variant="outline" onClick={() => navigate(`/pets/${pet.id}/edit`)}>
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit Profile
-                </Button>}
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <Button variant="outline" onClick={() => window.print()} aria-label="Print pet record">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                  </Button>
+                  {!isGuest && <Button variant="outline" onClick={() => navigate(`/pets/${pet.id}/edit`)}>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Profile
+                  </Button>}
+                </div>
               </div>
             </div>
 
@@ -654,17 +723,11 @@ export const PetDetailPage: React.FC = () => {
 
             {/* Medications List */}
             {medications.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-slate-100 dark:bg-navy-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                  </svg>
-                </div>
-                <p className="text-slate-600 dark:text-slate-400 mb-2">No medications added yet</p>
-                <p className="text-sm text-slate-500 dark:text-slate-500">
-                  Add your pet's medications to track safety and interactions
-                </p>
-              </div>
+              <EmptyState
+                title="No medications added yet"
+                description="Add your pet's medications to track safety and interactions."
+                action={!isGuest ? { label: 'Add Medication', onClick: () => setShowMedicationForm(true) } : undefined}
+              />
             ) : (
               <div className="space-y-4">
                 {medications.map((medication) => (

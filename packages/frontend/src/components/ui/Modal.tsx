@@ -101,7 +101,7 @@ export const Modal: React.FC<ModalProps> = ({
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-navy-700 flex items-center justify-between">
               {title && (
                 <h3
                   id="modal-title"
@@ -148,7 +148,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Footer */}
           {footer && (
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-navy-900/50 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-navy-700 bg-gray-50 dark:bg-navy-900/50 flex justify-end gap-3">
               {footer}
             </div>
           )}

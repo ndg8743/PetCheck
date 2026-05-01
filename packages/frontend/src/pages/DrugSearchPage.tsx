@@ -401,7 +401,7 @@ export const DrugSearchPage: React.FC = () => {
       </div>
 
       {/* Disclaimer */}
-      <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-gray-700 mt-12">
+      <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-navy-700 mt-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <Disclaimer variant="inline" />
         </div>

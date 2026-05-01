@@ -178,7 +178,7 @@ export const SpeciesSelector: React.FC<SpeciesSelectorProps> = ({
                   ${
                     isSelected
                       ? 'bg-primary-50 dark:bg-primary-900/30 border-2 border-primary-500 shadow-sm'
-                      : 'bg-white dark:bg-navy-800 border-2 border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600'
+                      : 'bg-white dark:bg-navy-800 border-2 border-gray-200 dark:border-navy-700 hover:border-primary-300 dark:hover:border-primary-600'
                   }
                 `}
                 aria-pressed={isSelected}

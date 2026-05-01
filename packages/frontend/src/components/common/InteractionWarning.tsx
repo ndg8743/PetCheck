@@ -137,7 +137,7 @@ export const InteractionWarning: React.FC<InteractionWarningProps> = ({
       className={`
         rounded-2xl overflow-hidden
         bg-white dark:bg-navy-800
-        border border-gray-200 dark:border-gray-700
+        border border-gray-200 dark:border-navy-700
         shadow-card
         animate-fade-in
         ${className}
@@ -260,7 +260,7 @@ export const InteractionWarning: React.FC<InteractionWarningProps> = ({
       </div>
 
       {/* Footer disclaimer */}
-      <div className="px-5 py-4 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-gray-700">
+      <div className="px-5 py-4 bg-gray-50 dark:bg-gray-700/20 border-t border-gray-100 dark:border-navy-700">
         <div className="flex items-start gap-2">
           <svg
             className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0"
@@ -310,7 +310,7 @@ export const InteractionSummary: React.FC<InteractionSummaryProps> = ({
       className={`
         flex items-center gap-3 px-4 py-3 rounded-xl
         bg-white dark:bg-navy-800
-        border border-gray-200 dark:border-gray-700
+        border border-gray-200 dark:border-navy-700
         hover:border-primary-300 dark:hover:border-primary-600
         hover:shadow-card-hover
         transition-all duration-200

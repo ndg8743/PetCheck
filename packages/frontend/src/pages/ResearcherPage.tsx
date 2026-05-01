@@ -337,7 +337,7 @@ export const ResearcherPage: React.FC = () => {
               <Card variant="elevated" className="animate-fade-up" style={{ animationDelay: '0.2s' }}>
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-navy-900 dark:text-white mb-4">Raw Data</h3>
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-navy-700">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-navy-800">
                         <tr>

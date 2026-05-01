@@ -169,7 +169,7 @@ const LoginPageContent: React.FC = () => {
             </div>
 
             {/* Features */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <div className="border-t border-gray-200 dark:border-navy-700 pt-6">
               <p className="text-sm font-semibold text-navy-900 dark:text-white mb-4">
                 What you can do:
               </p>
@@ -188,7 +188,7 @@ const LoginPageContent: React.FC = () => {
             </div>
 
             {/* Disclaimer */}
-            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-navy-700">
               <p className="text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed">
                 This app uses public FDA data. It is for informational purposes only
                 and does not replace professional veterinary advice.

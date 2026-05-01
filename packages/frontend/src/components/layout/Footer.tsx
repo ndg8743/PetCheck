@@ -176,7 +176,7 @@ export const FooterCompact: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-white dark:bg-navy-900 border-t border-gray-200 dark:border-gray-700 mt-auto">
+    <footer className="bg-white dark:bg-navy-900 border-t border-gray-200 dark:border-navy-700 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
           <p>&copy; {currentYear} PetCheck. All rights reserved.</p>
