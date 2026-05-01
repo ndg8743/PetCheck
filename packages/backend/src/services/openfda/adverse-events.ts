@@ -183,13 +183,14 @@ export class AdverseEventsService {
 
       return {
         type: countField as AdverseEventAggregation['type'],
-        data: response.results.map((r) => ({
+        data: response.results.map((r: any) => ({
           field: countField,
-          // openFDA returns time_series buckets as YYYYMMDD integers; expose
-          // them as YYYY-MM strings so consumers can chart them directly.
+          // openFDA returns time_series buckets keyed `time` (not `term`) as
+          // YYYYMMDD integers/strings. Fall back through term/time/date so we
+          // don't end up with an empty string. Format to YYYY-MM for display.
           term:
             countField === 'time_series'
-              ? formatTimeSeriesTerm(r.term)
+              ? formatTimeSeriesTerm(r.term ?? r.time ?? r.date)
               : r.term,
           count: r.count,
         })),
@@ -520,13 +521,24 @@ export class AdverseEventsService {
   }
 
   private formatTimeSeries(data: { term: string; count: number }[]): { month: string; count: number }[] {
-    // OpenFDA returns dates as YYYYMMDD integers
-    return data
-      .filter((d) => d.term && d.term.length >= 6)
-      .map((d) => ({
-        month: `${d.term.substring(0, 4)}-${d.term.substring(4, 6)}`,
-        count: d.count,
-      }))
+    // openFDA returns YYYYMMDD; getAggregation may have already converted to
+    // YYYY-MM. Handle both shapes idempotently and aggregate per-month.
+    const monthly = new Map<string, number>();
+    for (const d of data) {
+      if (!d.term) continue;
+      const s = String(d.term);
+      let month = '';
+      if (/^\d{4}-\d{2}/.test(s)) {
+        month = s.substring(0, 7);
+      } else if (/^\d{6,8}$/.test(s)) {
+        month = `${s.substring(0, 4)}-${s.substring(4, 6)}`;
+      } else {
+        continue;
+      }
+      monthly.set(month, (monthly.get(month) ?? 0) + d.count);
+    }
+    return [...monthly.entries()]
+      .map(([month, count]) => ({ month, count }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }
 }
