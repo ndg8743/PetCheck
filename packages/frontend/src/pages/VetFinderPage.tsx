@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { useAuth } from '../contexts/AuthContext';
+import { Modal } from '../components/ui/Modal';
+import api from '../lib/api';
 
 interface VetClinic {
   id: string;
@@ -30,7 +33,68 @@ interface VetClinic {
   };
 }
 
+interface MiniPet { id: string; name: string; species: string }
+
 export const VetFinderPage: React.FC = () => {
+  const { user, isAuthenticated } = useAuth();
+  const isGuest = !!user?.isGuest;
+  const [userPets, setUserPets] = useState<MiniPet[]>([]);
+  const [savingClinicId, setSavingClinicId] = useState<string | null>(null);
+  const [petPickerFor, setPetPickerFor] = useState<VetClinic | null>(null);
+  const [saveStatus, setSaveStatus] = useState<{ clinicId: string; ok: boolean; message: string } | null>(null);
+
+  // Load the user's pets once so we can show a "Save as primary vet" affordance.
+  // Skipped for unauthenticated visitors and for guests (who can't write).
+  useEffect(() => {
+    if (!isAuthenticated || isGuest) {
+      setUserPets([]);
+      return;
+    }
+    api.get('/pets')
+      .then((res) => {
+        const pets = (res.data?.data ?? []) as Array<{ id: string; name: string; species: string }>;
+        setUserPets(pets.map((p) => ({ id: p.id, name: p.name, species: p.species })));
+      })
+      .catch(() => setUserPets([]));
+  }, [isAuthenticated, isGuest]);
+
+  const saveVetToPet = async (clinic: VetClinic, petId: string) => {
+    setSavingClinicId(clinic.id);
+    try {
+      await api.patch(`/pets/${petId}`, {
+        veterinarian: {
+          clinicName: clinic.name,
+          address: `${clinic.address}, ${clinic.city}, ${clinic.state} ${clinic.zipCode}`.trim(),
+          phone: clinic.phone,
+          placeId: clinic.id,
+        },
+      });
+      const pet = userPets.find((p) => p.id === petId);
+      setSaveStatus({ clinicId: clinic.id, ok: true, message: `Saved as ${pet?.name ?? 'your pet'}'s primary vet.` });
+    } catch (err: any) {
+      setSaveStatus({ clinicId: clinic.id, ok: false, message: err?.response?.data?.error?.message ?? 'Could not save vet.' });
+    } finally {
+      setSavingClinicId(null);
+      setPetPickerFor(null);
+    }
+  };
+
+  const handleSavePrimary = (clinic: VetClinic) => {
+    if (!isAuthenticated || isGuest) {
+      setSaveStatus({ clinicId: clinic.id, ok: false, message: 'Sign in with Google to save a vet to your pet.' });
+      return;
+    }
+    if (userPets.length === 0) {
+      setSaveStatus({ clinicId: clinic.id, ok: false, message: 'Add a pet first to save a primary vet.' });
+      return;
+    }
+    if (userPets.length === 1) {
+      saveVetToPet(clinic, userPets[0].id);
+      return;
+    }
+    setPetPickerFor(clinic);
+  };
+
   const [location, setLocation] = useState('');
   const [clinics, setClinics] = useState<VetClinic[]>([]);
   const [loading, setLoading] = useState(false);
@@ -442,7 +506,26 @@ export const VetFinderPage: React.FC = () => {
                             }>
                               {expandedClinic === clinic.id ? 'Hide Hours' : 'View Hours'}
                             </Button>
+                            {!isGuest && isAuthenticated && (
+                              <Button
+                                variant="secondary"
+                                onClick={() => handleSavePrimary(clinic)}
+                                disabled={savingClinicId === clinic.id}
+                                leftIcon={
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                  </svg>
+                                }
+                              >
+                                {savingClinicId === clinic.id ? 'Saving…' : 'Save as primary vet'}
+                              </Button>
+                            )}
                           </div>
+                          {saveStatus?.clinicId === clinic.id && (
+                            <Alert variant={saveStatus.ok ? 'success' : 'warning'} className="mt-3">
+                              {saveStatus.message}
+                            </Alert>
+                          )}
                         </div>
                       </Card>
                     ))}
@@ -479,6 +562,29 @@ export const VetFinderPage: React.FC = () => {
           </Alert>
         </div>
       </div>
+
+      {/* Pet picker shown when the user has 2+ pets and clicks "Save as primary vet". */}
+      <Modal
+        isOpen={!!petPickerFor}
+        onClose={() => setPetPickerFor(null)}
+        title="Save vet to which pet?"
+        size="sm"
+      >
+        <div className="space-y-2">
+          {userPets.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => petPickerFor && saveVetToPet(petPickerFor, p.id)}
+              disabled={savingClinicId !== null}
+              className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 dark:border-navy-700 hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors disabled:opacity-50"
+            >
+              <div className="font-medium text-navy-900 dark:text-white">{p.name}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">{p.species}</div>
+            </button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 };

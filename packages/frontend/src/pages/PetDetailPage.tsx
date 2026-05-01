@@ -13,6 +13,26 @@ import { ConfirmDialog } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 
+// One-tap presets for the most common pet meds — saves users typing the
+// odd spellings (Apoquel, NexGard, Cefovecin) and gets the route/frequency
+// right for the typical use case. User can always tweak after applying.
+type MedPreset = {
+  label: string;
+  drugName: string;
+  route: 'oral' | 'topical' | 'injectable';
+  dosage: string;
+  frequency: string; // matches backend enum
+  notes?: string;
+};
+const MED_PRESETS: MedPreset[] = [
+  { label: 'Heartgard',  drugName: 'Heartgard Plus', route: 'oral',    dosage: '1 chew',       frequency: 'monthly' },
+  { label: 'Bravecto',   drugName: 'Bravecto',       route: 'oral',    dosage: '1 chew',       frequency: 'custom', notes: 'Every 12 weeks' },
+  { label: 'NexGard',    drugName: 'NexGard',        route: 'oral',    dosage: '1 chew',       frequency: 'monthly' },
+  { label: 'Apoquel',    drugName: 'Apoquel',        route: 'oral',    dosage: '5.4 mg',       frequency: 'twice_daily' },
+  { label: 'Frontline',  drugName: 'Frontline Plus', route: 'topical', dosage: '1 applicator', frequency: 'monthly' },
+  { label: 'Carprofen',  drugName: 'Carprofen',      route: 'oral',    dosage: '25 mg',        frequency: 'twice_daily' },
+];
+
 // Friendly labels for the medication-frequency enum the backend stores.
 const FREQUENCY_LABELS: Record<string, string> = {
   once_daily: 'Once daily',
@@ -28,6 +48,13 @@ const FREQUENCY_LABELS: Record<string, string> = {
 };
 const formatFrequency = (f: string): string => FREQUENCY_LABELS[f] ?? f;
 
+interface PrimaryVet {
+  clinicName?: string;
+  address?: string;
+  phone?: string;
+  placeId?: string;
+}
+
 interface Pet {
   id: string;
   name: string;
@@ -37,6 +64,7 @@ interface Pet {
   weight: number;
   birthDate: string;
   imageUrl?: string;
+  veterinarian?: PrimaryVet;
 }
 
 interface Medication {
@@ -129,6 +157,7 @@ export const PetDetailPage: React.FC = () => {
           weight: petData.weight?.value || 0,
           birthDate: petData.dateOfBirth || '',
           imageUrl: petData.profileImageUrl,
+          veterinarian: petData.veterinarian,
         });
 
         // Map medications from API
@@ -444,6 +473,41 @@ export const PetDetailPage: React.FC = () => {
           </div>
         </Card>
 
+        {/* Primary Vet — set via "Save as primary vet" on the Find Vets page */}
+        <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '50ms' }}>
+          <div className="p-6 md:p-8">
+            {pet.veterinarian?.clinicName ? (
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Primary Vet</div>
+                  <h3 className="text-lg font-display font-bold text-navy-900 dark:text-white">{pet.veterinarian.clinicName}</h3>
+                  {pet.veterinarian.address && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{pet.veterinarian.address}</p>
+                  )}
+                  {pet.veterinarian.phone && (
+                    <a href={`tel:${pet.veterinarian.phone}`} className="text-sm text-primary-600 dark:text-primary-400 hover:underline mt-1 inline-block">
+                      {pet.veterinarian.phone}
+                    </a>
+                  )}
+                </div>
+                {!isGuest && (
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/vets')}>Change</Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Primary Vet</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No vet on file yet.</p>
+                </div>
+                {!isGuest && (
+                  <Button variant="outline" size="sm" onClick={() => navigate('/vets')}>Find a vet</Button>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
+
         {/* Current Medications */}
         <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '100ms' }}>
           <div className="p-6 md:p-8">
@@ -473,6 +537,37 @@ export const PetDetailPage: React.FC = () => {
                   <h3 className="text-lg font-display font-semibold text-navy-900 dark:text-white mb-4">
                     {editingMedication ? 'Edit Medication' : 'Add New Medication'}
                   </h3>
+
+                  {/* Quick-add chips — only shown for new entries. Tap pre-fills
+                      drug name + route + dosage + frequency; user adjusts after. */}
+                  {!editingMedication && (
+                    <div className="mb-4">
+                      <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+                        Common pet meds
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {MED_PRESETS.map((p) => (
+                          <button
+                            key={p.label}
+                            type="button"
+                            onClick={() =>
+                              setMedicationForm((prev) => ({
+                                ...prev,
+                                drugName: p.drugName,
+                                route: p.route,
+                                dosage: p.dosage,
+                                frequency: p.frequency,
+                                notes: p.notes ?? prev.notes,
+                              }))
+                            }
+                            className="px-3 py-1.5 text-sm rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid md:grid-cols-2 gap-4 mb-4">
                     <Input
