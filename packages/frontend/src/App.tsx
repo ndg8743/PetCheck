@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DrugSearchPage } from './pages/DrugSearchPage';
 import { DrugDetailPage } from './pages/DrugDetailPage';
+import { DrugComparePage } from './pages/DrugComparePage';
 import { PetListPage } from './pages/PetListPage';
 import { PetDetailPage } from './pages/PetDetailPage';
 import { PetCreatePage } from './pages/PetCreatePage';
@@ -18,6 +19,7 @@ import { InteractionCheckerPage } from './pages/InteractionCheckerPage';
 import { VetFinderPage } from './pages/VetFinderPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ResearcherPage } from './pages/ResearcherPage';
+import { SymptomCheckerPage } from './pages/SymptomCheckerPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Loading component
@@ -97,11 +99,14 @@ function App() {
         {/* Semi-public routes with AppShell */}
         <Route path="/drugs" element={<WithAppShell><DrugSearchPage /></WithAppShell>} />
         <Route path="/drugs/search" element={<WithAppShell><DrugSearchPage /></WithAppShell>} />
+        <Route path="/drugs/compare" element={<WithAppShell><DrugComparePage /></WithAppShell>} />
         <Route path="/drugs/:drugId" element={<WithAppShell><DrugDetailPage /></WithAppShell>} />
         <Route path="/recalls" element={<WithAppShell><RecallsPage /></WithAppShell>} />
         <Route path="/interactions" element={<WithAppShell><InteractionCheckerPage /></WithAppShell>} />
         <Route path="/vets" element={<WithAppShell><VetFinderPage /></WithAppShell>} />
-        <Route path="/vet-finder" element={<Navigate to="/vets" replace />} />
+        <Route path="/vet-finder" element={
+          <Navigate to="/vets" replace />
+        } />
 
         {/* Protected routes with AppShell */}
         <Route
@@ -157,6 +162,14 @@ function App() {
           element={
             <ProtectedRoute>
               <WithAppShell><ResearcherPage /></WithAppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/symptom-check"
+          element={
+            <ProtectedRoute>
+              <WithAppShell><SymptomCheckerPage /></WithAppShell>
             </ProtectedRoute>
           }
         />

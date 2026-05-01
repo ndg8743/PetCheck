@@ -16,6 +16,7 @@ import petsRoutes from './pets';
 import vetsRoutes from './vets';
 import healthRoutes from './health';
 import notificationsRoutes from './notifications';
+import symptomCheckRoutes from './symptom-check';
 
 const router = Router();
 
@@ -34,29 +35,31 @@ router.use('/interactions', interactionsRoutes);
 router.use('/pets', petsRoutes);
 router.use('/vets', vetsRoutes);
 router.use('/notifications', notificationsRoutes);
+router.use('/symptom-check', symptomCheckRoutes);
 
 // API root endpoint
-router.get('/', (req, res) => {
+router.get('/', (_req, res) => {
   res.json({
     success: true,
     data: {
-      name: 'PetCheck API',
-      version: process.env.npm_package_version || '1.0.0',
-      description: 'FDA Animal Drug Safety Explorer API',
+      name: `PetCheck API`,
+      version: process.env.npm_package_version || `1.0.0`,
+      description: `FDA Animal Drug Safety Explorer API`,
       endpoints: {
-        health: '/api/health',
-        auth: '/api/auth',
-        drugs: '/api/drugs',
-        adverseEvents: '/api/adverse-events',
-        recalls: '/api/recalls',
-        interactions: '/api/interactions',
-        pets: '/api/pets',
-        vets: '/api/vets',
-        notifications: '/api/notifications',
+        health: `/api/health`,
+        auth: `/api/auth`,
+        drugs: `/api/drugs`,
+        adverseEvents: `/api/adverse-events`,
+        recalls: `/api/recalls`,
+        interactions: `/api/interactions`,
+        pets: `/api/pets`,
+        vets: `/api/vets`,
+        notifications: `/api/notifications`,
+        symptomCheck: `/api/symptom-check`,
       },
       documentation: {
-        github: 'https://github.com/yourusername/petcheck',
-        apiDocs: '/api/docs', // Future: Add Swagger/OpenAPI docs
+        github: `https://github.com/yourusername/petcheck`,
+        apiDocs: `/api/docs`,
       },
     },
   });
