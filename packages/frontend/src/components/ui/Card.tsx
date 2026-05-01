@@ -7,6 +7,7 @@ export interface CardProps {
   hover?: boolean;
   onClick?: () => void;
   style?: React.CSSProperties;
+  id?: string;
 }
 
 export interface CardHeaderProps {
@@ -74,6 +75,7 @@ export const Card: React.FC<CardProps> = ({
   hover = false,
   onClick,
   style,
+  id,
 }) => {
   const hoverClasses = hover
     ? 'transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 cursor-pointer'
@@ -81,6 +83,7 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
+      id={id}
       className={`
         rounded-xl overflow-hidden
         ${variantClasses[variant]}

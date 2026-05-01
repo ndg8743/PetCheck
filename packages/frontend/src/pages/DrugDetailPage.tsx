@@ -196,7 +196,7 @@ export const DrugDetailPage: React.FC = () => {
     return ((value / total) * 100).toFixed(1);
   };
 
-  if (loading) {
+  if (loading && !drug) {
     return <LoadingScreen message="Loading drug details..." />;
   }
 

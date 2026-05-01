@@ -210,7 +210,10 @@ export const DashboardPage: React.FC = () => {
     return Math.max(0, score);
   };
 
-  if (loading) {
+  // Only block the page on the first load when there's nothing to show yet.
+  // Subsequent refreshes render inline with the existing data so the page
+  // doesn't flash a full-screen spinner on every revisit.
+  if (loading && pets.length === 0) {
     return <LoadingScreen message="Loading your dashboard..." />;
   }
 
@@ -360,7 +363,7 @@ export const DashboardPage: React.FC = () => {
                     variant="elevated"
                     hover
                     className="cursor-pointer animate-fade-up"
-                    style={{ animationDelay: `${0.25 + index * 0.05}s` }}
+                    style={{ animationDelay: `${Math.min(0.05 + index * 0.02, 0.25)}s` }}
                     onClick={() => navigate(`/pets/${pet.id}`)}
                   >
                     <div className="p-6">

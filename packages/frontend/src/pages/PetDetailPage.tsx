@@ -366,7 +366,7 @@ export const PetDetailPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading && !pet) {
     return <LoadingScreen message="Loading pet profile..." />;
   }
 

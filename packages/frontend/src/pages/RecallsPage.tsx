@@ -130,7 +130,10 @@ export const RecallsPage: React.FC = () => {
     setExpandedRecall(expandedRecall === recallId ? null : recallId);
   };
 
-  if (loading) {
+  // Don't lock the page behind a full-screen loader once we've already
+  // loaded recalls once. Filter changes happen client-side, so re-fetches
+  // are rare; the inline state is enough.
+  if (loading && recalls.length === 0) {
     return <LoadingScreen message="Loading recalls..." />;
   }
 
@@ -289,7 +292,7 @@ export const RecallsPage: React.FC = () => {
                 key={recall.id}
                 variant={recall.severity === 'high' ? 'danger' : recall.severity === 'moderate' ? 'warning' : 'default'}
                 className="animate-fade-up overflow-hidden"
-                style={{ animationDelay: `${0.2 + index * 0.03}s` }}
+                style={{ animationDelay: `${Math.min(0.05 + index * 0.015, 0.3)}s` }}
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between gap-4 mb-4">

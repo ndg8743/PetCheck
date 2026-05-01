@@ -105,7 +105,8 @@ export const PetListPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  // Render page chrome immediately on revisit; only the first load blocks.
+  if (loading && pets.length === 0) {
     return <LoadingScreen message="Loading your pets..." />;
   }
 

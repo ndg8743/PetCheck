@@ -7,6 +7,7 @@ import { Alert } from '../components/ui/Alert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { Modal } from '../components/ui/Modal';
+import { VetMap } from '../components/features/VetMap';
 import api from '../lib/api';
 
 interface VetClinic {
@@ -22,6 +23,7 @@ interface VetClinic {
   reviewCount: number;
   specialties: string[];
   emergencyServices: boolean;
+  location: { lat: number; lng: number };
   hours: {
     monday: string;
     tuesday: string;
@@ -102,6 +104,7 @@ export const VetFinderPage: React.FC = () => {
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedClinic, setExpandedClinic] = useState<string | null>(null);
+  const [searchCenter, setSearchCenter] = useState<{ lat: number; lng: number } | null>(null);
 
   const searchByCoordinates = async (latitude: number, longitude: number) => {
     setLoading(true);
@@ -131,6 +134,7 @@ export const VetFinderPage: React.FC = () => {
           reviewCount: clinic.userRatingsTotal || clinic.reviewCount || 0,
           specialties: clinic.types?.filter((t: string) => t !== 'veterinary_care' && t !== 'point_of_interest') || [],
           emergencyServices: clinic.openNow || clinic.types?.includes('emergency') || false,
+          location: clinic.location ?? { lat: 0, lng: 0 },
           hours: clinic.openingHours || {
             monday: 'Call for hours',
             tuesday: 'Call for hours',
@@ -142,6 +146,10 @@ export const VetFinderPage: React.FC = () => {
           },
         }));
         setClinics(transformedClinics);
+        setSearchCenter(
+          data.data?.searchLocation ??
+          (transformedClinics[0]?.location?.lat ? transformedClinics[0].location : null)
+        );
       } else {
         setClinics([]);
       }
@@ -181,6 +189,7 @@ export const VetFinderPage: React.FC = () => {
           reviewCount: clinic.userRatingsTotal || clinic.reviewCount || 0,
           specialties: clinic.types?.filter((t: string) => t !== 'veterinary_care' && t !== 'point_of_interest') || [],
           emergencyServices: clinic.openNow || clinic.types?.includes('emergency') || false,
+          location: clinic.location ?? { lat: 0, lng: 0 },
           hours: clinic.openingHours || {
             monday: 'Call for hours',
             tuesday: 'Call for hours',
@@ -192,6 +201,10 @@ export const VetFinderPage: React.FC = () => {
           },
         }));
         setClinics(transformedClinics);
+        setSearchCenter(
+          data.data?.searchLocation ??
+          (transformedClinics[0]?.location?.lat ? transformedClinics[0].location : null)
+        );
       } else {
         setClinics([]);
       }
@@ -360,21 +373,18 @@ export const VetFinderPage: React.FC = () => {
                     </h2>
                   </div>
 
-                  {/* Map Placeholder */}
+                  {/* Live OSM map of the search results */}
                   <Card variant="elevated" className="mb-6 overflow-hidden animate-fade-up" style={{ animationDelay: '0.05s' }}>
-                    <div className="h-64 bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-navy-800 dark:to-navy-700 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-white/80 dark:bg-navy-600/80 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                          <svg className="w-8 h-8 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                          </svg>
-                        </div>
-                        <p className="text-navy-900 dark:text-white font-medium">Map view will be displayed here</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Integration with mapping service required
-                        </p>
-                      </div>
-                    </div>
+                    <VetMap
+                      clinics={clinics
+                        .filter((c) => c.location?.lat && c.location?.lng)
+                        .map((c) => ({ id: c.id, name: c.name, distance: c.distance, location: c.location }))}
+                      searchLocation={searchCenter}
+                      onPinClick={(id) => {
+                        setExpandedClinic(id);
+                        document.getElementById(`clinic-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    />
                   </Card>
 
                   {/* Clinic List */}
@@ -382,9 +392,10 @@ export const VetFinderPage: React.FC = () => {
                     {clinics.map((clinic, index) => (
                       <Card
                         key={clinic.id}
+                        id={`clinic-${clinic.id}`}
                         variant="elevated"
                         hover
-                        className="animate-fade-up"
+                        className="animate-fade-up scroll-mt-24"
                         style={{ animationDelay: `${0.1 + index * 0.05}s` }}
                       >
                         <div className="p-6">
