@@ -9,7 +9,28 @@ import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Alert } from '../components/ui/Alert';
 import { Disclaimer } from '../components/common/Disclaimer';
-import { COMMON_SYMPTOMS, SymptomMatch, SymptomCheckResponse, Pet } from '@petcheck/shared';
+import type { SymptomMatch, SymptomCheckResponse, Pet, CommonSymptom } from '@petcheck/shared';
+
+// Mirror of shared COMMON_SYMPTOMS. Inlined because Vite/Rollup's CJS
+// interop drops re-exported runtime values from the shared package's
+// __exportStar tree at build time. Type-only imports above are fine.
+const COMMON_SYMPTOMS: CommonSymptom[] = [
+  { id: 'vomiting', displayLabel: 'Vomiting', veddraTerms: ['vomit', 'emesis', 'regurgitation'] },
+  { id: 'diarrhea', displayLabel: 'Diarrhea', veddraTerms: ['diarrhea', 'diarrhoea', 'loose stool', 'soft faeces', 'soft feces'] },
+  { id: 'lethargy', displayLabel: 'Lethargy', veddraTerms: ['lethargy', 'lethargic', 'depression', 'malaise', 'listless'] },
+  { id: 'anorexia', displayLabel: 'Loss of appetite (anorexia)', veddraTerms: ['anorexia', 'inappetence', 'decreased appetite', 'appetite lost', 'appetite decreased'] },
+  { id: 'pruritus', displayLabel: 'Itching (pruritus)', veddraTerms: ['pruritus', 'itching', 'scratching'] },
+  { id: 'seizures', displayLabel: 'Seizures', veddraTerms: ['seizure', 'convulsion', 'epilepsy'] },
+  { id: 'ataxia', displayLabel: 'Ataxia (loss of coordination)', veddraTerms: ['ataxia', 'incoordination', 'unsteady', 'staggering'] },
+  { id: 'tremors', displayLabel: 'Tremors', veddraTerms: ['tremor', 'shaking', 'shivering'] },
+  { id: 'pu_pd', displayLabel: 'Increased thirst / urination (PU/PD)', veddraTerms: ['polyuria', 'polydipsia', 'increased thirst', 'increased urination', 'pu/pd'] },
+  { id: 'weight_loss', displayLabel: 'Weight loss', veddraTerms: ['weight loss', 'weight decreased', 'cachexia', 'wasting'] },
+  { id: 'hypersalivation', displayLabel: 'Excessive drooling', veddraTerms: ['hypersalivation', 'salivation', 'drooling', 'ptyalism'] },
+  { id: 'dyspnea', displayLabel: 'Difficulty breathing (dyspnea)', veddraTerms: ['dyspnea', 'dyspnoea', 'respiratory distress', 'breathing difficulty', 'tachypnea'] },
+  { id: 'tachycardia', displayLabel: 'Rapid heart rate (tachycardia)', veddraTerms: ['tachycardia', 'rapid heart rate', 'heart rate increased'] },
+  { id: 'hematemesis', displayLabel: 'Vomiting blood (hematemesis)', veddraTerms: ['hematemesis', 'haematemesis', 'vomiting blood', 'bloody vomit'] },
+  { id: 'jaundice', displayLabel: 'Jaundice (yellowing)', veddraTerms: ['jaundice', 'icterus', 'yellow mucous membrane'] },
+];
 
 const FREE_TEXT_VALUE = `__free__`;
 
