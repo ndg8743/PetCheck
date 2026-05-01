@@ -77,6 +77,22 @@ export interface RecallAlert {
   acknowledgedAt?: Date;
 }
 
+/** A recall that affects one or more of a user's pets, with which pets/meds matched. */
+export interface PetRecallMatch {
+  recall: Recall;
+  affectedPets: Array<{
+    petId: string;
+    petName: string;
+    medicationName: string;
+  }>;
+}
+
+export interface PetRecallMatchResponse {
+  matches: PetRecallMatch[];
+  totalAffectedPets: number;
+  totalActiveRecalls: number;
+}
+
 export function getRecallSeverityFromClass(recallClass: RecallClass): 'high' | 'medium' | 'low' {
   switch (recallClass) {
     case 'I':

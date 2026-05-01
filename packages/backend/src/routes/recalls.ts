@@ -6,7 +6,10 @@
 import { Router, Request, Response } from 'express';
 import { query, param, validationResult } from 'express-validator';
 import { recallsService } from '../services/openfda';
-import { optionalAuth } from '../middleware/auth';
+import { petService } from '../services/pets';
+import { getGuestPets } from '../services/guest/mock-pets';
+import { authenticate, optionalAuth } from '../middleware/auth';
+import { setInCache, getFromCache } from '../services/redis';
 import { searchRateLimiter } from '../middleware/rate-limit';
 import { asyncHandler, AppError } from '../middleware/error-handler';
 import { createLogger } from '../services/logger';
@@ -16,7 +19,10 @@ import {
   RecallSearchParams,
   RecallClass,
   RecallStatus,
+  PetRecallMatch,
+  PetRecallMatchResponse,
 } from '@petcheck/shared';
+import crypto from 'crypto';
 
 const logger = createLogger('recalls-routes');
 const router = Router();
@@ -172,6 +178,107 @@ router.get(
       hasActiveRecall: status.hasActiveRecall,
       activeRecallCount: status.recalls.length,
     }));
+  })
+);
+
+/**
+ * GET /recalls/check-pets
+ * Cross-reference the authenticated user's pets' current medications against
+ * active FDA recalls, so the dashboard / recalls page can show "1 active
+ * recall affects Buddy". Cached per-user on a hash of the medication list
+ * so a quiet user doesn't re-hit openFDA on every page load.
+ */
+router.get(
+  '/check-pets',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const isGuest = !!req.user?.isGuest;
+    const pets = isGuest
+      ? getGuestPets()
+      : await petService.getPetsByUserId(req.userId!);
+
+    // Collect each pet's drug names + their generic names (case-insensitive
+    // dedupe keys). We also keep a per-drug map of which (pet, med) pairs
+    // would match so we can populate `affectedPets`.
+    type DrugIndex = { drugName: string; petId: string; petName: string; medName: string };
+    const drugIndex: DrugIndex[] = [];
+    const drugNameSet = new Set<string>();
+    for (const pet of pets) {
+      for (const med of pet.currentMedications ?? []) {
+        if (!med.isActive) continue;
+        const candidates = [med.drugName, med.genericName].filter(Boolean) as string[];
+        for (const name of candidates) {
+          drugIndex.push({
+            drugName: name,
+            petId: pet.id,
+            petName: pet.name,
+            medName: med.drugName,
+          });
+          drugNameSet.add(name.toLowerCase());
+        }
+      }
+    }
+
+    if (drugNameSet.size === 0) {
+      const empty: PetRecallMatchResponse = { matches: [], totalAffectedPets: 0, totalActiveRecalls: 0 };
+      return res.json(createApiResponse(empty));
+    }
+
+    const sortedDrugs = [...drugNameSet].sort();
+    const cacheKey = `recall-matches:user:${req.userId}:${crypto
+      .createHash('sha1')
+      .update(sortedDrugs.join('|'))
+      .digest('hex')}`;
+    const cached = await getFromCache<PetRecallMatchResponse>(cacheKey);
+    if (cached && !cached.stale) {
+      return res.json(createApiResponse(cached.data));
+    }
+
+    const recalls = await recallsService.getRecallsForDrugs([...drugNameSet]);
+    const activeRecalls = recalls.filter((r) => r.status === 'ongoing');
+
+    // For each active recall, list which (pet, medication) pairs matched.
+    // openFDA puts the affected drug in productDescription / productName /
+    // genericName; we match case-insensitively against any of them.
+    const matches: PetRecallMatch[] = [];
+    const affectedPetIds = new Set<string>();
+    for (const recall of activeRecalls) {
+      const haystack = [
+        recall.productName,
+        recall.productDescription,
+        recall.genericName,
+      ]
+        .filter(Boolean)
+        .join(' | ')
+        .toLowerCase();
+      const affected = drugIndex.filter((d) =>
+        haystack.includes(d.drugName.toLowerCase())
+      );
+      if (affected.length === 0) continue;
+
+      // Dedupe by (petId, medName) so two-name candidates don't double up.
+      const seen = new Set<string>();
+      const affectedPets = affected
+        .filter((a) => {
+          const key = `${a.petId}|${a.medName}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((a) => ({ petId: a.petId, petName: a.petName, medicationName: a.medName }));
+
+      affectedPets.forEach((p) => affectedPetIds.add(p.petId));
+      matches.push({ recall, affectedPets });
+    }
+
+    const response: PetRecallMatchResponse = {
+      matches,
+      totalAffectedPets: affectedPetIds.size,
+      totalActiveRecalls: activeRecalls.length,
+    };
+
+    await setInCache(cacheKey, response, { ttl: 300, staleTtl: 1800 });
+    return res.json(createApiResponse(response));
   })
 );
 

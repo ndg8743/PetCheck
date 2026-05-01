@@ -8,6 +8,7 @@ import { Select } from '../components/ui/Select';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { fetchDrugSuggestions } from '../lib/suggest';
+import { useUserRecalls } from '../hooks/useUserRecalls';
 
 interface Recall {
   id: string;
@@ -163,6 +164,10 @@ export const RecallsPage: React.FC = () => {
             FDA-wide recalls affecting veterinary medications and products. Add pets to your profile to see which recalls apply to your medications.
           </p>
         </div>
+
+        {/* "Your pets at risk" banner — shown only when at least one of the
+            user's pet's current medications is named in an active recall. */}
+        <PetAtRiskBanner />
 
         {/* Alert Banner */}
         {highSeverityCount > 0 && (
@@ -370,5 +375,55 @@ export const RecallsPage: React.FC = () => {
         </Alert>
       </div>
     </div>
+  );
+};
+
+/**
+ * Banner that surfaces FDA recalls affecting any of the user's pets'
+ * active medications. Hidden when there are no matches or the user is
+ * unauthenticated.
+ */
+const PetAtRiskBanner: React.FC = () => {
+  const { matches, totalAffectedPets, loading } = useUserRecalls();
+  if (loading || matches.length === 0) return null;
+
+  const petNames = Array.from(
+    new Set(matches.flatMap((m) => m.affectedPets.map((p) => p.petName)))
+  );
+  const petSummary =
+    petNames.length === 1
+      ? petNames[0]
+      : petNames.length === 2
+        ? `${petNames[0]} and ${petNames[1]}`
+        : `${petNames.slice(0, -1).join(', ')}, and ${petNames[petNames.length - 1]}`;
+
+  return (
+    <Alert
+      variant="danger"
+      className="mb-6 animate-fade-up"
+      icon={
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      }
+    >
+      <div>
+        <h3 className="font-semibold">
+          {matches.length} active recall{matches.length !== 1 ? 's' : ''}{' '}
+          affect{totalAffectedPets === 1 ? 's' : ''} {petSummary}
+        </h3>
+        <ul className="text-sm opacity-90 mt-2 space-y-1">
+          {matches.slice(0, 3).map((m) => (
+            <li key={m.recall.id}>
+              <strong>{m.recall.productName}</strong> — affects{' '}
+              {m.affectedPets.map((p) => `${p.petName} (${p.medicationName})`).join(', ')}
+            </li>
+          ))}
+          {matches.length > 3 && (
+            <li className="opacity-70">+ {matches.length - 3} more — see full list below.</li>
+          )}
+        </ul>
+      </div>
+    </Alert>
   );
 };

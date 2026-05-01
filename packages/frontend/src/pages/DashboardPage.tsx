@@ -5,6 +5,17 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { normalizeBreed } from '../lib/petDisplay';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserRecalls } from '../hooks/useUserRecalls';
+
+// Inlined to dodge a Vite/Rollup CJS-interop quirk that drops some helpers
+// from the shared package's __exportStar tree at build time.
+const getRecallSeverityFromClass = (recallClass: string | undefined): 'high' | 'medium' | 'low' => {
+  switch (recallClass) {
+    case 'I': return 'high';
+    case 'II': return 'medium';
+    default: return 'low';
+  }
+};
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
@@ -85,10 +96,35 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isGuest = !!user?.isGuest;
+  const recallMatches = useUserRecalls();
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Convert recall matches into the local AlertItem shape used by the
+  // existing Active Alerts section. severity 'medium' → 'moderate' to fit
+  // the local enum.
+  useEffect(() => {
+    if (recallMatches.loading) return;
+    const items: AlertItem[] = [];
+    for (const match of recallMatches.matches) {
+      const sev = getRecallSeverityFromClass(match.recall.recallClass ?? 'unknown');
+      const severity: 'high' | 'moderate' | 'low' = sev === 'medium' ? 'moderate' : sev;
+      for (const p of match.affectedPets) {
+        items.push({
+          id: `${match.recall.id}-${p.petId}-${p.medicationName}`,
+          type: 'recall',
+          severity,
+          title: `Recall: ${match.recall.productName}`,
+          message: `${p.petName}'s ${p.medicationName} is named in this active recall. ${match.recall.reason || ''}`.trim(),
+          petId: p.petId,
+          date: (match.recall.recallInitiationDate ?? new Date().toISOString()) as string,
+        });
+      }
+    }
+    setAlerts(items);
+  }, [recallMatches.loading, recallMatches.matches]);
 
   const fetchDashboardData = async () => {
     try {
@@ -119,9 +155,7 @@ export const DashboardPage: React.FC = () => {
       }));
       setPets(dashboardPets);
 
-      // No fake alerts - start empty
-      setAlerts([]);
-
+      // Alerts are now sourced from useUserRecalls (see useEffect below).
       setLoading(false);
     } catch (err: any) {
       console.error('Failed to load dashboard:', err);

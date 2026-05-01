@@ -80,6 +80,11 @@ export const PetDetailPage: React.FC = () => {
   const [showMedicationForm, setShowMedicationForm] = useState(false);
   const [editingMedication, setEditingMedication] = useState<Medication | null>(null);
   const [deletingMedicationId, setDeletingMedicationId] = useState<string | null>(null);
+  // Interaction precheck state — when adding a new med produces a high/medium
+  // severity warning, we stash the pending payload and show a ConfirmDialog
+  // before actually persisting.
+  const [pendingMedication, setPendingMedication] = useState<any | null>(null);
+  const [interactionWarnings, setInteractionWarnings] = useState<Array<{ severity?: string; [k: string]: any }>>([]);
 
   // Medication form state
   const [medicationForm, setMedicationForm] = useState({
@@ -173,6 +178,18 @@ export const PetDetailPage: React.FC = () => {
     }
   };
 
+  const persistMedication = async (medicationData: any) => {
+    if (editingMedication) {
+      await api.patch(`/pets/${id}/medications/${editingMedication.id}`, medicationData);
+    } else {
+      await api.post(`/pets/${id}/medications`, medicationData);
+    }
+    await fetchPetDetails();
+    resetMedicationForm();
+    setPendingMedication(null);
+    setInteractionWarnings([]);
+  };
+
   const handleSaveMedication = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -194,17 +211,39 @@ export const PetDetailPage: React.FC = () => {
         notes: medicationForm.notes || undefined,
       };
 
-      if (editingMedication) {
-        // Update existing medication via API
-        await api.patch(`/pets/${id}/medications/${editingMedication.id}`, medicationData);
-      } else {
-        // Add new medication via API
-        await api.post(`/pets/${id}/medications`, medicationData);
+      // Skip the precheck on edits where the drug name didn't change —
+      // adjusting dosage or frequency can't introduce a new interaction.
+      const drugNameChanged = !editingMedication ||
+        editingMedication.drugName?.toLowerCase() !== medicationForm.drugName.toLowerCase();
+
+      if (drugNameChanged && pet) {
+        const otherDrugs = medications
+          .filter((m) => m.id !== editingMedication?.id)
+          .map((m) => ({ name: m.drugName }));
+        const newDrug = { name: medicationForm.drugName };
+        try {
+          const checkResp = await api.post('/interactions/check', {
+            drugs: [...otherDrugs, newDrug],
+            species: pet.species,
+            conditions: conditions.map((c) => c.name),
+          });
+          const result = checkResp.data?.data ?? checkResp.data;
+          const interactions = (result?.interactions ?? []) as Array<{ severity?: string; [k: string]: any }>;
+          const blocking = interactions.filter((i) =>
+            ['high', 'major', 'medium', 'moderate'].includes((i.severity ?? '').toLowerCase())
+          );
+          if (blocking.length > 0) {
+            setPendingMedication(medicationData);
+            setInteractionWarnings(blocking);
+            return;
+          }
+        } catch (precheckErr) {
+          // Don't block the save on a precheck failure — log and continue.
+          console.warn('Interaction precheck failed, proceeding without warning:', precheckErr);
+        }
       }
 
-      // Refresh pet details to get updated data
-      await fetchPetDetails();
-      resetMedicationForm();
+      await persistMedication(medicationData);
     } catch (err: any) {
       console.error('Failed to save medication:', err);
       alert(err.response?.data?.message || 'Failed to save medication. Please try again.');
@@ -780,6 +819,31 @@ export const PetDetailPage: React.FC = () => {
         message="Are you sure you want to remove this medication from the list? This action cannot be undone."
         confirmLabel="Remove"
         variant="danger"
+      />
+
+      {/* Interaction precheck dialog — flagged before save when this drug
+          would interact with an existing medication. */}
+      <ConfirmDialog
+        isOpen={!!pendingMedication}
+        onClose={() => { setPendingMedication(null); setInteractionWarnings([]); }}
+        onConfirm={() => pendingMedication && persistMedication(pendingMedication)}
+        title="Possible drug interaction"
+        message={
+          interactionWarnings.length === 0
+            ? 'This medication may interact with another in your pet\'s list. Save anyway?'
+            : `${interactionWarnings.length} interaction warning${interactionWarnings.length !== 1 ? 's' : ''} detected:\n\n` +
+              interactionWarnings
+                .slice(0, 3)
+                .map((i) => {
+                  const drugs = (i as any).drugs?.map((d: any) => d.name).join(' + ') ?? 'this drug';
+                  const desc = (i as any).description ?? (i as any).message ?? 'See details';
+                  return `• [${(i.severity ?? 'unknown').toUpperCase()}] ${drugs}: ${desc}`;
+                })
+                .join('\n')
+        }
+        confirmLabel="Save anyway"
+        cancelLabel="Cancel"
+        variant="warning"
       />
     </div>
   );
