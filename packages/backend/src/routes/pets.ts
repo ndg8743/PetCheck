@@ -68,7 +68,11 @@ router.post(
       ])
       .withMessage('Valid species is required'),
     body('breed').optional().isString().trim(),
-    body('dateOfBirth').optional().isISO8601(),
+    body('dateOfBirth')
+      .optional()
+      .isISO8601()
+      .custom((val) => new Date(val) <= new Date())
+      .withMessage('Birth date cannot be in the future'),
     body('approximateAge').optional().isObject(),
     body('approximateAge.value').optional().isInt({ min: 0 }),
     body('approximateAge.unit').optional().isIn(['month', 'year']),
@@ -161,7 +165,11 @@ router.patch(
     param('id').isString().trim().notEmpty().withMessage('Pet ID is required'),
     body('name').optional().isString().trim(),
     body('breed').optional().isString().trim(),
-    body('dateOfBirth').optional().isISO8601(),
+    body('dateOfBirth')
+      .optional()
+      .isISO8601()
+      .custom((val) => new Date(val) <= new Date())
+      .withMessage('Birth date cannot be in the future'),
     body('approximateAge').optional().isObject(),
     body('approximateAge.value').optional().isInt({ min: 0 }),
     body('approximateAge.unit').optional().isIn(['month', 'year']),

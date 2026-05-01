@@ -31,7 +31,9 @@ export const RecallsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
+  // Default to "All" — at any given time most recalls are resolved, so an
+  // "Active" default makes the page look empty on first load.
+  const [statusFilter, setStatusFilter] = useState('');
   const [speciesFilter, setSpeciesFilter] = useState('');
   const [expandedRecall, setExpandedRecall] = useState<string | null>(null);
   // Native browser autocomplete options for the recall search input.

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { normalizeBreed } from '../lib/petDisplay';
 import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
@@ -55,10 +56,20 @@ const QuickActionCard: React.FC<{
   return (
     <button
       onClick={onClick}
-      className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${colorClasses[color]}`}
+      aria-label={label}
+      className={`
+        group p-4 rounded-xl border
+        transition-all duration-300 ease-out
+        hover:-translate-y-0.5 hover:shadow-elevated
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
+        dark:focus-visible:ring-offset-navy-900
+        ${colorClasses[color]}
+      `}
     >
       <div className="flex flex-col items-center gap-2">
-        <div className="w-10 h-10 flex items-center justify-center">{icon}</div>
+        <div className="w-10 h-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+          {icon}
+        </div>
         <span className="text-sm font-medium">{label}</span>
       </div>
     </button>
@@ -89,7 +100,7 @@ export const DashboardPage: React.FC = () => {
         id: pet.id,
         name: pet.name,
         species: pet.species,
-        breed: pet.breed || 'Unknown',
+        breed: normalizeBreed(pet.breed),
         age: pet.approximateAge?.value || 0,
         weight: pet.weight?.value || 0,
         imageUrl: pet.profileImageUrl,

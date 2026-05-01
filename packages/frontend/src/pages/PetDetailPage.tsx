@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { normalizeBreed } from '../lib/petDisplay';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
@@ -100,7 +101,7 @@ export const PetDetailPage: React.FC = () => {
           id: petData.id,
           name: petData.name,
           species: petData.species || 'Dog',
-          breed: petData.breed || 'Unknown',
+          breed: normalizeBreed(petData.breed),
           age: age,
           weight: petData.weight?.value || 0,
           birthDate: petData.dateOfBirth || '',
