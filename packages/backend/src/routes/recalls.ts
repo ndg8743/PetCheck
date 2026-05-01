@@ -71,10 +71,16 @@ router.get(
       searchParams.recallClass = classStr.split(',').map(c => c.trim() as RecallClass);
     }
 
-    // Parse status array
+    // Parse status array.
+    // openFDA uses 'ongoing' / 'terminated' / 'completed'. Accept the
+    // friendlier 'active' as a synonym for 'ongoing' so callers using the
+    // canonical lifecycle term don't get an empty result silently.
     if (req.query.status) {
       const statusStr = req.query.status as string;
-      searchParams.status = statusStr.split(',').map(s => s.trim() as RecallStatus);
+      searchParams.status = statusStr
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .map((s) => (s === 'active' ? 'ongoing' : s) as RecallStatus);
     }
 
     if (req.query.dateFrom) {
@@ -119,10 +125,21 @@ router.get(
     logger.info('Getting active recalls');
     const recalls = await recallsService.getActiveRecalls(limit);
 
-    res.json(createApiResponse(recalls, {
-      total: recalls.length,
-      activeOnly: true,
-    }));
+    // Match the shape of GET /recalls so consumers can read `data.recalls`
+    // consistently (instead of branching between array vs wrapped object).
+    res.json(createApiResponse(
+      {
+        recalls,
+        total: recalls.length,
+        limit,
+        offset: 0,
+        query: { status: 'active' as const },
+      },
+      {
+        total: recalls.length,
+        activeOnly: true,
+      }
+    ));
   })
 );
 

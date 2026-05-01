@@ -185,13 +185,30 @@ export class AdverseEventsService {
         type: countField as AdverseEventAggregation['type'],
         data: response.results.map((r) => ({
           field: countField,
-          term: r.term,
+          // openFDA returns time_series buckets as YYYYMMDD integers; expose
+          // them as YYYY-MM strings so consumers can chart them directly.
+          term:
+            countField === 'time_series'
+              ? formatTimeSeriesTerm(r.term)
+              : r.term,
           count: r.count,
         })),
         total: response.results.reduce((sum, r) => sum + r.count, 0),
         query: params,
       };
     } catch (error) {
+      // openFDA can't aggregate `route` or `species` for animal events; instead
+      // of a 502 the route returns an empty bucket so charts can render a
+      // "no data" state rather than break.
+      if (countField === 'route' || countField === 'species') {
+        logger.warn(`Adverse events aggregation (${countField}) unsupported by openFDA — returning empty.`);
+        return {
+          type: countField as AdverseEventAggregation['type'],
+          data: [],
+          total: 0,
+          query: params,
+        };
+      }
       logger.error('Adverse events aggregation error:', error);
       throw error;
     }
@@ -254,10 +271,17 @@ export class AdverseEventsService {
         seriousReports,
         deathReports,
         speciesBreakdown: [], // Species aggregation not available in FDA API
-        outcomeBreakdown: outcomeAgg?.data.map((d) => ({
-          outcome: this.mapOutcome(d.term),
-          count: d.count,
-        })) || [],
+        // Multiple raw openFDA outcome strings can collapse to the same
+        // canonical OutcomeSeriousness, so we sum counts before emitting —
+        // otherwise the response had duplicate keys (e.g. `unknown` twice).
+        outcomeBreakdown: (() => {
+          const merged = new Map<string, number>();
+          for (const d of outcomeAgg?.data ?? []) {
+            const key = this.mapOutcome(d.term);
+            merged.set(key, (merged.get(key) ?? 0) + d.count);
+          }
+          return Array.from(merged, ([outcome, count]) => ({ outcome: outcome as any, count }));
+        })(),
         topReactions: reactionAgg?.data.slice(0, 10).map((d) => ({
           reaction: d.term,
           count: d.count,
@@ -346,10 +370,16 @@ export class AdverseEventsService {
    * Transform raw openFDA event to our AdverseEvent type
    */
   private transformEvent(raw: OpenFdaAdverseEvent): AdverseEvent {
+    // openFDA's actual schema has `animal.species` as a flat string (e.g.
+    // "Dog") and the breed object at `animal.breed`, not nested under
+    // species. Reading the wrong path turned every event into "Unknown".
+    const rawSpecies = (raw.animal as any)?.species;
+    const speciesString = typeof rawSpecies === 'string' ? rawSpecies : (rawSpecies?.name as string | undefined);
+    const breedObj = (raw.animal as any)?.breed ?? rawSpecies?.breed;
     const animal: AnimalInfo = {
-      species: raw.animal?.species?.name || 'Unknown',
-      speciesCategory: this.inferSpeciesCategory(raw.animal?.species?.name),
-      breed: raw.animal?.species?.breed?.breed_component,
+      species: speciesString || 'Unknown',
+      speciesCategory: this.inferSpeciesCategory(speciesString),
+      breed: breedObj?.breed_component,
       gender: this.mapGender(raw.animal?.gender),
       reproductiveStatus: raw.animal?.reproductive_status,
     };
@@ -499,6 +529,20 @@ export class AdverseEventsService {
       }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }
+}
+
+/**
+ * Convert openFDA's YYYYMMDD time-series term into a YYYY-MM string the
+ * frontend can render directly. Returns the raw term unchanged if it
+ * doesn't look like a date.
+ */
+function formatTimeSeriesTerm(term: string | number | undefined): string {
+  if (term == null) return '';
+  const s = String(term);
+  if (s.length >= 6 && /^\d+$/.test(s)) {
+    return `${s.substring(0, 4)}-${s.substring(4, 6)}`;
+  }
+  return s;
 }
 
 export const adverseEventsService = new AdverseEventsService();

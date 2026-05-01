@@ -33,6 +33,8 @@ router.get(
   [
     query('species').optional().isString(),
     query('drugName').optional().isString().trim(),
+    // Accept `drug` as alias for `drugName` so callers using either work.
+    query('drug').optional().isString().trim(),
     query('activeIngredient').optional().isString().trim(),
     query('manufacturer').optional().isString().trim(),
     query('reaction').optional().isString().trim(),
@@ -64,6 +66,8 @@ router.get(
 
     if (req.query.drugName) {
       searchParams.drugName = req.query.drugName as string;
+    } else if (req.query.drug) {
+      searchParams.drugName = req.query.drug as string;
     }
 
     if (req.query.activeIngredient) {
@@ -121,6 +125,8 @@ router.get(
       .withMessage('Invalid aggregation field'),
     query('species').optional().isString(),
     query('drugName').optional().isString().trim(),
+    // Accept `drug` as alias for `drugName` so callers using either work.
+    query('drug').optional().isString().trim(),
     query('activeIngredient').optional().isString().trim(),
     query('manufacturer').optional().isString().trim(),
     query('reaction').optional().isString().trim(),
@@ -149,6 +155,8 @@ router.get(
 
     if (req.query.drugName) {
       searchParams.drugName = req.query.drugName as string;
+    } else if (req.query.drug) {
+      searchParams.drugName = req.query.drug as string;
     }
 
     if (req.query.activeIngredient) {
