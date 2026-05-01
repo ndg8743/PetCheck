@@ -6,6 +6,8 @@
 import { Router, Request, Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { petService } from '../services/pets';
+import { petWeightLogRepository } from '../services/database';
+import { v4 as uuidv4 } from 'uuid';
 import { getGuestPets, getGuestPetById, getGuestPetSafetySummary } from '../services/guest/mock-pets';
 import { authenticate, requireNonGuest } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/error-handler';
@@ -582,6 +584,95 @@ router.get(
 
     logger.info(`Safety summary generated for pet ${req.params.id}`);
     res.json(createApiResponse(safetySummary));
+  })
+);
+
+// ===========================================================================
+// Pet Weight Logs (Feature G — Weight history sparkline)
+// ===========================================================================
+
+/**
+ * GET /pets/:petId/weights — list weight logs for a pet, oldest first.
+ */
+router.get(
+  '/:petId/weights',
+  authenticate,
+  [param('petId').isString().trim().notEmpty()],
+  asyncHandler(async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid pet ID', 400, { errors: errors.array() });
+    }
+    // Guests get an empty list (no real persistence). Mock pets don't track weight history.
+    if (req.user?.isGuest) return res.json(createApiResponse([]));
+
+    const pet = await petService.getPetById(req.params.petId);
+    if (!pet) throw new AppError(ERROR_CODES.PET_NOT_FOUND, 'Pet not found', 404);
+    if (pet.userId !== req.userId) {
+      throw new AppError(ERROR_CODES.INSUFFICIENT_PERMISSIONS, 'Not your pet', 403);
+    }
+    const logs = await petWeightLogRepository.findByPetId(req.params.petId);
+    res.json(createApiResponse(logs));
+  })
+);
+
+/**
+ * POST /pets/:petId/weights — add a weight entry.
+ */
+router.post(
+  '/:petId/weights',
+  authenticate,
+  requireNonGuest,
+  [
+    param('petId').isString().trim().notEmpty(),
+    body('value').isFloat({ gt: 0 }).withMessage('Weight must be positive'),
+    body('unit').isIn(['kg', 'lb']),
+    body('recordedAt').optional().isISO8601(),
+    body('notes').optional().isString().trim(),
+  ],
+  asyncHandler(async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid weight log', 400, { errors: errors.array() });
+    }
+    const pet = await petService.getPetById(req.params.petId);
+    if (!pet) throw new AppError(ERROR_CODES.PET_NOT_FOUND, 'Pet not found', 404);
+    if (pet.userId !== req.userId) {
+      throw new AppError(ERROR_CODES.INSUFFICIENT_PERMISSIONS, 'Not your pet', 403);
+    }
+    const log = await petWeightLogRepository.create({
+      id: uuidv4(),
+      userId: req.userId!,
+      petId: req.params.petId,
+      value: parseFloat(req.body.value),
+      unit: req.body.unit,
+      recordedAt: req.body.recordedAt ? new Date(req.body.recordedAt) : new Date(),
+      notes: req.body.notes,
+      createdAt: new Date(),
+    });
+    res.status(201).json(createApiResponse(log));
+  })
+);
+
+/**
+ * DELETE /pets/:petId/weights/:logId
+ */
+router.delete(
+  '/:petId/weights/:logId',
+  authenticate,
+  requireNonGuest,
+  [
+    param('petId').isString().trim().notEmpty(),
+    param('logId').isUUID(),
+  ],
+  asyncHandler(async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, 'Invalid IDs', 400, { errors: errors.array() });
+    }
+    const ok = await petWeightLogRepository.delete(req.params.logId, req.userId!);
+    if (!ok) throw new AppError(ERROR_CODES.NOT_FOUND, 'Weight log not found', 404);
+    res.status(204).end();
   })
 );
 

@@ -8,6 +8,7 @@ import { Alert } from '../components/ui/Alert';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { Container } from '../components/ui/Container';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Sparkline } from '../components/Sparkline';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { Disclaimer } from '../components/common/Disclaimer';
 import { TabButtons } from '../components/ui/Tabs';
@@ -51,6 +52,7 @@ export const DrugDetailPage: React.FC = () => {
   const [drug, setDrug] = useState<DrugDetail | null>(null);
   const [adverseEvents, setAdverseEvents] = useState<AdverseEvent[]>([]);
   const [speciesData, setSpeciesData] = useState<SpeciesBreakdown[]>([]);
+  const [monthlyCounts, setMonthlyCounts] = useState<{ month: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactionDrugs, setInteractionDrugs] = useState<string[]>(['']);
@@ -130,6 +132,13 @@ export const DrugDetailPage: React.FC = () => {
         recallDetails: drugData.recallDetails,
         lastUpdated: drugData.lastUpdated ? new Date(drugData.lastUpdated).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       });
+
+      // Last 12 months of adverse-event report counts (Feature H)
+      if (Array.isArray(aeSummary?.timeSeriesMonthly) && aeSummary.timeSeriesMonthly.length > 0) {
+        setMonthlyCounts(aeSummary.timeSeriesMonthly.slice(-12));
+      } else {
+        setMonthlyCounts([]);
+      }
 
       if (aeSummary?.topReactions && aeSummary.topReactions.length > 0) {
         const totalReactions = aeSummary.topReactions.reduce((sum: number, r: any) => sum + r.count, 0);
@@ -400,6 +409,21 @@ export const DrugDetailPage: React.FC = () => {
                       </svg>
                       Adverse Event Summary
                     </h2>
+
+                    {/* Reports-over-time sparkline (Feature H) */}
+                    {monthlyCounts.length > 0 ? (
+                      <div className="mb-6 p-4 rounded-xl border border-gray-200 dark:border-navy-700 bg-gray-50 dark:bg-navy-800/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reports over last 12 months</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {monthlyCounts[0]?.month} – {monthlyCounts[monthlyCounts.length - 1]?.month}
+                          </span>
+                        </div>
+                        <div className="text-warning-500 dark:text-warning-400">
+                          <Sparkline values={monthlyCounts.map((m) => m.count)} ariaLabel="Adverse-event reports per month" />
+                        </div>
+                      </div>
+                    ) : null}
 
                     {adverseEvents.length > 0 ? (
                       <>

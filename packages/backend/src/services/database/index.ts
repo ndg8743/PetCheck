@@ -26,6 +26,7 @@ let dbInitWarningLogged = false;
 const inMemoryUsers = new Map<string, any>();
 const inMemorySessions = new Map<string, any>();
 const inMemoryPets = new Map<string, any>();
+const inMemoryWeightLogs = new Map<string, any>();
 
 // Create connection pool
 let pool: Pool | null = null;
@@ -158,6 +159,20 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    // Pet weight logs (Feature G — Weight history sparkline)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pet_weight_logs (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
+        value NUMERIC(8,3) NOT NULL,
+        unit VARCHAR(8) NOT NULL DEFAULT 'lb',
+        recorded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
     // Create indexes
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
@@ -167,6 +182,8 @@ export async function initializeDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
       CREATE INDEX IF NOT EXISTS idx_pets_user_id ON pets(user_id);
       CREATE INDEX IF NOT EXISTS idx_pets_species ON pets(species);
+      CREATE INDEX IF NOT EXISTS idx_pet_weight_logs_pet_id ON pet_weight_logs(pet_id, recorded_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pet_weight_logs_user_id ON pet_weight_logs(user_id);
     `);
 
     await client.query('COMMIT');
@@ -789,6 +806,95 @@ export async function isDatabaseHealthy(): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================================================
+// Pet Weight Logs Repository (Feature G)
+// ============================================================================
+export interface PetWeightLog {
+  id: string;
+  userId: string;
+  petId: string;
+  value: number;
+  unit: 'kg' | 'lb';
+  recordedAt: Date;
+  notes?: string;
+  createdAt: Date;
+}
+
+function mapRowToWeightLog(row: any): PetWeightLog {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    petId: row.pet_id,
+    value: typeof row.value === 'string' ? parseFloat(row.value) : row.value,
+    unit: row.unit,
+    recordedAt: row.recorded_at instanceof Date ? row.recorded_at : new Date(row.recorded_at),
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+  };
+}
+
+export const petWeightLogRepository = {
+  async create(log: PetWeightLog): Promise<PetWeightLog> {
+    if (useInMemoryDb) {
+      inMemoryWeightLogs.set(log.id, log);
+      return log;
+    }
+    if (!pool) throw new Error('Database not available');
+    try {
+      const result = await pool.query(
+        `INSERT INTO pet_weight_logs (id, user_id, pet_id, value, unit, recorded_at, notes, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [log.id, log.userId, log.petId, log.value, log.unit, log.recordedAt, log.notes ?? null, log.createdAt]
+      );
+      return mapRowToWeightLog(result.rows[0]);
+    } catch (err) {
+      logger.error('Weight log create error:', err);
+      throw err;
+    }
+  },
+
+  async findByPetId(petId: string): Promise<PetWeightLog[]> {
+    if (useInMemoryDb) {
+      const all: PetWeightLog[] = [];
+      for (const log of inMemoryWeightLogs.values()) {
+        if (log.petId === petId) all.push(log);
+      }
+      return all.sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+    }
+    if (!pool) return [];
+    try {
+      const result = await pool.query(
+        'SELECT * FROM pet_weight_logs WHERE pet_id = $1 ORDER BY recorded_at ASC',
+        [petId]
+      );
+      return result.rows.map(mapRowToWeightLog);
+    } catch (err) {
+      logger.error('Weight log find error:', err);
+      return [];
+    }
+  },
+
+  async delete(id: string, userId: string): Promise<boolean> {
+    if (useInMemoryDb) {
+      const existing = inMemoryWeightLogs.get(id);
+      if (!existing || existing.userId !== userId) return false;
+      inMemoryWeightLogs.delete(id);
+      return true;
+    }
+    if (!pool) return false;
+    try {
+      const result = await pool.query(
+        'DELETE FROM pet_weight_logs WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      return (result.rowCount ?? 0) > 0;
+    } catch (err) {
+      logger.error('Weight log delete error:', err);
+      return false;
+    }
+  },
+};
 
 /**
  * Graceful shutdown

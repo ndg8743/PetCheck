@@ -8,6 +8,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { LoadingScreen } from '../components/ui/LoadingSpinner';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Sparkline } from '../components/Sparkline';
 import { Alert } from '../components/ui/Alert';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -577,6 +578,9 @@ export const PetDetailPage: React.FC = () => {
           </div>
         </Card>
 
+        {/* Weight history (Feature G) */}
+        <WeightHistoryCard petId={pet.id} isGuest={isGuest} initialWeight={pet.weight} />
+
         {/* Current Medications */}
         <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '100ms' }}>
           <div className="p-6 md:p-8">
@@ -1004,5 +1008,135 @@ export const PetDetailPage: React.FC = () => {
         variant="warning"
       />
     </div>
+  );
+};
+
+interface WeightLog {
+  id: string;
+  value: number;
+  unit: 'kg' | 'lb';
+  recordedAt: string;
+  notes?: string;
+}
+
+const WeightHistoryCard: React.FC<{ petId: string; isGuest: boolean; initialWeight: number }> = ({ petId, isGuest, initialWeight }) => {
+  const [logs, setLogs] = useState<WeightLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [valueInput, setValueInput] = useState<string>(initialWeight ? String(initialWeight) : '');
+  const [unitInput, setUnitInput] = useState<'kg' | 'lb'>('lb');
+  const [dateInput, setDateInput] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!petId) return;
+    let cancelled = false;
+    setLoading(true);
+    api.get(`/pets/${petId}/weights`)
+      .then((res) => {
+        if (cancelled) return;
+        const list: WeightLog[] = (res.data?.data ?? []).map((l: any) => ({
+          id: l.id,
+          value: typeof l.value === 'string' ? parseFloat(l.value) : l.value,
+          unit: l.unit,
+          recordedAt: l.recordedAt,
+          notes: l.notes,
+        }));
+        // Pull the unit of the latest entry as the form default.
+        if (list.length > 0) setUnitInput(list[list.length - 1].unit);
+        setLogs(list);
+      })
+      .catch(() => setLogs([]))
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [petId]);
+
+  const addEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    const value = parseFloat(valueInput);
+    if (!value || value <= 0) {
+      setSubmitError('Enter a positive weight value.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const resp = await api.post(`/pets/${petId}/weights`, {
+        value,
+        unit: unitInput,
+        recordedAt: new Date(dateInput).toISOString(),
+      });
+      const newLog: WeightLog = {
+        id: resp.data?.data?.id,
+        value,
+        unit: unitInput,
+        recordedAt: resp.data?.data?.recordedAt ?? new Date(dateInput).toISOString(),
+      };
+      setLogs((prev) => [...prev, newLog].sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()));
+      setValueInput('');
+    } catch (err: any) {
+      setSubmitError(err?.response?.data?.error?.message ?? 'Failed to save weight.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const values = logs.map((l) => l.value);
+  const latest = logs[logs.length - 1];
+
+  return (
+    <Card variant="elevated" className="mb-8 animate-fade-up" style={{ animationDelay: '75ms' }}>
+      <div className="p-6 md:p-8">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-display font-bold text-navy-900 dark:text-white">Weight history</h2>
+            {latest ? (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Latest: <span className="font-medium text-navy-900 dark:text-white">{latest.value} {latest.unit}</span>{' '}
+                <span className="opacity-60">({new Date(latest.recordedAt).toLocaleDateString()})</span>
+              </p>
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-400">No entries yet.</p>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="h-[60px] bg-gray-100 dark:bg-navy-800 rounded animate-pulse" />
+        ) : values.length > 0 ? (
+          <div className="text-primary-500 dark:text-primary-400 mb-2">
+            <Sparkline values={values} ariaLabel="Weight trend" />
+          </div>
+        ) : null}
+
+        {!isGuest && (
+          <form onSubmit={addEntry} className="grid sm:grid-cols-[1fr_100px_140px_auto] gap-2 items-end mt-4">
+            <Input
+              label="Weight"
+              type="number"
+              step="0.1"
+              value={valueInput}
+              onChange={(e) => setValueInput(e.target.value)}
+              placeholder="e.g. 32.5"
+              required
+            />
+            <Select label="Unit" value={unitInput} onChange={(e) => setUnitInput(e.target.value as 'kg' | 'lb')}>
+              <option value="lb">lb</option>
+              <option value="kg">kg</option>
+            </Select>
+            <Input
+              label="Date"
+              type="date"
+              value={dateInput}
+              onChange={(e) => setDateInput(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              required
+            />
+            <Button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Add'}</Button>
+          </form>
+        )}
+        {submitError && <Alert variant="warning" className="mt-3">{submitError}</Alert>}
+      </div>
+    </Card>
   );
 };
