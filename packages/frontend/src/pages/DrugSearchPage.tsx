@@ -13,6 +13,13 @@ import { SearchBar } from '../components/common/SearchBar';
 import { SafetyIndicator } from '../components/features/SafetyIndicator';
 import { fetchDrugSuggestions } from '../lib/suggest';
 
+// Compare-picker config. The selection is held in sessionStorage so a
+// reload during the compare flow keeps the state but a new tab starts
+// empty. Cap of 3 matches the grid in DrugComparePage.
+const COMPARE_STORAGE_KEY = `drugCompareSelectedIds`;
+const MAX_COMPARE = 3;
+const API_BASE = (import.meta as any).env?.VITE_API_URL || `http://localhost:3001/api`;
+
 interface Drug {
   id: string;
   name: string;
@@ -26,26 +33,50 @@ interface Drug {
   lastUpdated: string;
 }
 
+function readSelectedIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(COMPARE_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.filter((x) => typeof x === `string`));
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+function writeSelectedIds(ids: Set<string>): void {
+  try {
+    sessionStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // ignore
+  }
+}
+
 export const DrugSearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get(`q`) || ``);
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
-    species: searchParams.get('species') || '',
-    drugClass: searchParams.get('drugClass') || '',
-    route: searchParams.get('route') || '',
+    species: searchParams.get(`species`) || ``,
+    drugClass: searchParams.get(`drugClass`) || ``,
+    route: searchParams.get(`route`) || ``,
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => readSelectedIds());
   const itemsPerPage = 20;
   const navigate = useNavigate();
 
-  // Debounced search
+  useEffect(() => {
+    writeSelectedIds(selectedIds);
+  }, [selectedIds]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchParams.get('q')) {
+      if (searchParams.get(`q`)) {
         performSearch();
       }
     }, 300);
@@ -54,7 +85,7 @@ export const DrugSearchPage: React.FC = () => {
   }, [searchParams]);
 
   const performSearch = async () => {
-    const query = searchParams.get('q') || '';
+    const query = searchParams.get(`q`) || ``;
     if (!query.trim()) {
       setDrugs([]);
       setTotalResults(0);
@@ -66,25 +97,24 @@ export const DrugSearchPage: React.FC = () => {
       setError(null);
 
       const params = new URLSearchParams();
-      params.set('query', query);
-      params.set('limit', itemsPerPage.toString());
-      params.set('offset', ((currentPage - 1) * itemsPerPage).toString());
-      if (filters.species) params.set('species', filters.species);
-      if (filters.drugClass) params.set('drugClass', filters.drugClass);
-      if (filters.route) params.set('route', filters.route);
+      params.set(`query`, query);
+      params.set(`limit`, itemsPerPage.toString());
+      params.set(`offset`, ((currentPage - 1) * itemsPerPage).toString());
+      if (filters.species) params.set(`species`, filters.species);
+      if (filters.drugClass) params.set(`drugClass`, filters.drugClass);
+      if (filters.route) params.set(`route`, filters.route);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/drugs?${params}`);
+      const response = await fetch(`${API_BASE}/drugs?${params}`);
       const data = await response.json();
 
       if (data.success && data.data) {
-        // The API response can have drugs at data.data or data.data.drugs
         const drugsList = Array.isArray(data.data) ? data.data : data.data.drugs || [];
-        
+
         const transformedDrugs: Drug[] = drugsList.map((drug: any) => ({
           id: drug.id,
-          name: drug.tradeName || drug.genericName || 'Unknown',
-          genericName: drug.genericName || drug.activeIngredients?.[0]?.name || '',
-          manufacturer: drug.manufacturer || 'Unknown',
+          name: drug.tradeName || drug.genericName || `Unknown`,
+          genericName: drug.genericName || drug.activeIngredients?.[0]?.name || ``,
+          manufacturer: drug.manufacturer || `Unknown`,
           species: drug.approvedSpecies || [],
           totalReports: drug.totalReports || 0,
           seriousReports: drug.seriousReports || 0,
@@ -103,8 +133,8 @@ export const DrugSearchPage: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error('Search error:', err);
-      setError('Failed to search drugs. Please try again.');
+      console.error(err);
+      setError(`Failed to search drugs. Please try again.`);
       setDrugs([]);
       setTotalResults(0);
     } finally {
@@ -116,26 +146,47 @@ export const DrugSearchPage: React.FC = () => {
     setCurrentPage(1);
     setSearchQuery(query);
     const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    if (filters.species) params.set('species', filters.species);
-    if (filters.drugClass) params.set('drugClass', filters.drugClass);
-    if (filters.route) params.set('route', filters.route);
+    if (query) params.set(`q`, query);
+    if (filters.species) params.set(`species`, filters.species);
+    if (filters.drugClass) params.set(`drugClass`, filters.drugClass);
+    if (filters.route) params.set(`route`, filters.route);
     setSearchParams(params);
   };
 
   const handleFilterChange = (key: string, value: string) => {
     setCurrentPage(1);
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const clearFilters = () => {
-    setFilters({ species: '', drugClass: '', route: '' });
-    setSearchQuery('');
+    setFilters({ species: ``, drugClass: ``, route: `` });
+    setSearchQuery(``);
     setSearchParams({});
     setDrugs([]);
     setTotalResults(0);
   };
 
+  // Compare-picker handlers. Cap at MAX_COMPARE; the rest of the UI
+  // disables unchecked boxes once the cap is hit so the user does not
+  // have to silently pick the right one.
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_COMPARE) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelected = () => setSelectedIds(new Set());
+
+  const goToCompare = () => {
+    const ids = [...selectedIds].join(`,`);
+    navigate(`/drugs/compare?ids=${ids}`);
+  };
 
   const getSafetyScore = (drug: Drug): number => {
     if (drug.totalReports === 0) return 100;
@@ -146,11 +197,12 @@ export const DrugSearchPage: React.FC = () => {
 
   const hasFilters = filters.species || filters.drugClass || filters.route;
   const totalPages = Math.ceil(totalResults / itemsPerPage);
+  const compareDisabled = selectedIds.size >= MAX_COMPARE;
+  const showCompareBar = selectedIds.size >= 2;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-navy-900">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8 animate-fade-up">
           <h1 className="text-3xl font-bold text-navy-900 dark:text-white font-display mb-2">Drug Safety Search</h1>
           <p className="text-gray-600 dark:text-gray-400">
@@ -158,14 +210,9 @@ export const DrugSearchPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Search and Filters — SearchBar manages its own form internally,
-            so we use a plain div wrapper here (nested forms broke the icon-
-            button submit). */}
         <Card variant="elevated" className="mb-8 animate-fade-up">
           <div className="p-6">
             <div className="space-y-6">
-              {/* Search Input — autocomplete shows popular drugs on focus,
-                  prefix/substring matches as you type. */}
               <div>
                 <label className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
                   Search for a drug
@@ -179,7 +226,6 @@ export const DrugSearchPage: React.FC = () => {
                 />
               </div>
 
-              {/* Filters */}
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="species" className="block text-sm font-medium text-navy-900 dark:text-white mb-2">
@@ -188,7 +234,7 @@ export const DrugSearchPage: React.FC = () => {
                   <Select
                     id="species"
                     value={filters.species}
-                    onChange={(e) => handleFilterChange('species', e.target.value)}
+                    onChange={(e) => handleFilterChange(`species`, e.target.value)}
                   >
                     <option value="">All Species</option>
                     <option value="canine">Dogs</option>
@@ -204,7 +250,7 @@ export const DrugSearchPage: React.FC = () => {
                   <Select
                     id="drugClass"
                     value={filters.drugClass}
-                    onChange={(e) => handleFilterChange('drugClass', e.target.value)}
+                    onChange={(e) => handleFilterChange(`drugClass`, e.target.value)}
                   >
                     <option value="">All Classes</option>
                     <option value="antibiotic">Antibiotic</option>
@@ -219,7 +265,7 @@ export const DrugSearchPage: React.FC = () => {
                   <Select
                     id="route"
                     value={filters.route}
-                    onChange={(e) => handleFilterChange('route', e.target.value)}
+                    onChange={(e) => handleFilterChange(`route`, e.target.value)}
                   >
                     <option value="">All Routes</option>
                     <option value="oral">Oral</option>
@@ -240,25 +286,22 @@ export const DrugSearchPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Results Info */}
         {searchQuery && (
           <div className="mb-4 text-sm text-gray-600 dark:text-gray-400 animate-fade-up">
-            {loading && 'Searching...'}
+            {loading && `Searching...`}
             {!loading && totalResults > 0 && (
               <>Showing 1-{Math.min(itemsPerPage, drugs.length)} of {totalResults} results</>
             )}
-            {!loading && totalResults === 0 && drugs.length === 0 && 'No results found'}
+            {!loading && totalResults === 0 && drugs.length === 0 && `No results found`}
           </div>
         )}
 
-        {/* Error Alert */}
         {error && (
           <Alert variant="danger" className="mb-6 animate-fade-up">
             {error}
           </Alert>
         )}
 
-        {/* Loading State */}
         {loading && (
           <div className="space-y-4 animate-fade-up">
             {[1, 2, 3].map(i => (
@@ -273,23 +316,43 @@ export const DrugSearchPage: React.FC = () => {
           </div>
         )}
 
-        {/* Results */}
         {!loading && drugs.length > 0 && (
           <>
             <div className="space-y-4 animate-fade-up">
               {drugs.map((drug, index) => {
-                
                 const score = getSafetyScore(drug);
+                const isChecked = selectedIds.has(drug.id);
+                const checkboxDisabled = !isChecked && compareDisabled;
                 return (
                   <Card
                     key={drug.id}
                     variant="elevated"
                     hover
                     onClick={() => navigate(`/drugs/${drug.id}`)}
-                    className="p-6 cursor-pointer transition-all"
+                    className="p-6 cursor-pointer transition-all relative"
                     style={{ animationDelay: `${index * 50}ms` } as React.CSSProperties}
                   >
-                    <div className="flex items-start gap-6">
+                    {/* Checkbox in top-left for the compare picker. We
+                        stopPropagation so toggling the box does not also
+                        navigate to the drug detail page. */}
+                    <label
+                      className="absolute top-3 left-3 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={checkboxDisabled}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelected(drug.id);
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                      />
+                      Compare
+                    </label>
+
+                    <div className="flex items-start gap-6 pl-20">
                       <SafetyIndicator score={score} variant="circular" size="md" />
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-4 mb-2">
@@ -348,8 +411,6 @@ export const DrugSearchPage: React.FC = () => {
                 );
               })}
             </div>
-
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="mt-8 flex items-center justify-center gap-2 animate-fade-up">
                 <Button
@@ -357,7 +418,7 @@ export const DrugSearchPage: React.FC = () => {
                   disabled={currentPage === 1}
                   onClick={() => {
                     setCurrentPage(currentPage - 1);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.scrollTo({ top: 0, behavior: `smooth` });
                   }}
                   size="sm"
                 >
@@ -371,7 +432,7 @@ export const DrugSearchPage: React.FC = () => {
                   disabled={currentPage === totalPages}
                   onClick={() => {
                     setCurrentPage(currentPage + 1);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.scrollTo({ top: 0, behavior: `smooth` });
                   }}
                   size="sm"
                 >
@@ -382,7 +443,6 @@ export const DrugSearchPage: React.FC = () => {
           </>
         )}
 
-        {/* Empty State */}
         {!loading && drugs.length === 0 && !error && (
           <EmptyState
             icon={
@@ -390,17 +450,36 @@ export const DrugSearchPage: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             }
-            title={searchQuery ? 'No drugs found' : 'Search for a drug'}
+            title={searchQuery ? `No drugs found` : `Search for a drug`}
             description={
               searchQuery
-                ? 'Try a different search term or check the spelling'
-                : 'Enter a drug name above to search FDA adverse event reports'
+                ? `Try a different search term or check the spelling`
+                : `Enter a drug name above to search FDA adverse event reports`
             }
           />
         )}
       </div>
 
-      {/* Disclaimer */}
+      {/* Sticky compare bar appears once 2+ drugs are picked. */}
+      {showCompareBar && (
+        <div className="sticky bottom-0 left-0 right-0 z-30 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-navy-800/95 backdrop-blur-sm shadow-elevated">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div className="text-sm text-navy-900 dark:text-white">
+              <span className="font-semibold">{selectedIds.size}</span> selected
+              <span className="text-gray-500 dark:text-gray-400 ml-2">(max {MAX_COMPARE})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={clearSelected}>
+                Clear
+              </Button>
+              <Button variant="primary" size="sm" onClick={goToCompare}>
+                Compare {selectedIds.size} drugs
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="py-8 bg-gray-100 dark:bg-navy-800 border-t border-gray-200 dark:border-gray-700 mt-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <Disclaimer variant="inline" />
@@ -409,3 +488,8 @@ export const DrugSearchPage: React.FC = () => {
     </div>
   );
 };
+
+// Keep imports referenced — used by alternative loading states the
+// page may switch to in future iterations.
+void useCallback;
+void LoadingSpinner;
